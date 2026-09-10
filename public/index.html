@@ -37,6 +37,7 @@
       var(--ink);
     color:var(--paper);
     font-family:'Inter',sans-serif;
+    font-size:16.5px;
     -webkit-font-smoothing:antialiased;
   }
   .display{font-family:'Barlow Condensed',sans-serif; letter-spacing:0.01em;}
@@ -87,8 +88,8 @@
   .side-stat.tsb-neg .v{color:var(--coral);}
   .side-stat.tsb-pos .v{color:var(--sage);}
 
-  .main{flex:1; min-width:0; padding:48px 56px 64px; min-height:100vh; display:flex; flex-direction:column;}
-  .main-inner{max-width:780px; width:100%;}
+  .main{flex:1; min-width:0; padding:56px 72px 72px; min-height:100vh; display:flex; flex-direction:column;}
+  .main-inner{max-width:1180px; width:100%;}
 
   section.view{display:none;}
   section.view.active{display:block; animation:fadeIn .3s ease;}
@@ -97,13 +98,13 @@
 
   .card{
     background:var(--surface); border:1px solid var(--line);
-    border-radius:var(--radius); padding:24px 26px; margin-bottom:18px;
+    border-radius:var(--radius); padding:28px 32px; margin-bottom:20px;
   }
   .card h2{font-size:12.5px; text-transform:uppercase; font-weight:600; letter-spacing:0.07em; color:var(--paper-faint); margin:0 0 16px;}
   .card h2.plain{text-transform:none; letter-spacing:0; font-size:17px; color:var(--paper); font-weight:600;}
 
   .today-eyebrow{color:var(--paper-dim); font-size:13.5px; margin-bottom:10px;}
-  .today-hero-name{font-family:'Barlow Condensed',sans-serif; font-size:54px; font-weight:600; line-height:1.02; margin-bottom:6px;}
+  .today-hero-name{font-family:'Barlow Condensed',sans-serif; font-size:68px; font-weight:600; line-height:1.02; margin-bottom:6px;}
   .today-hero-meta{color:var(--paper-dim); font-size:15px; margin-bottom:22px;}
   .today-sessions{display:flex; flex-direction:column; gap:10px; margin-bottom:26px;}
   .today-empty{color:var(--paper-dim); font-size:15px; line-height:1.6; margin-bottom:26px;}
@@ -118,7 +119,7 @@
   .stat-row{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
   .stat{background:var(--surface-3); border-radius:var(--radius); padding:18px 20px;}
   .stat .k{font-size:12.5px; color:var(--paper-dim); margin-bottom:8px;}
-  .stat .v{font-family:'Barlow Condensed',sans-serif; font-size:34px; font-weight:600;}
+  .stat .v{font-family:'Barlow Condensed',sans-serif; font-size:40px; font-weight:600;}
   .stat.tsb-neg .v{color:var(--coral);}
   .stat.tsb-pos .v{color:var(--sage);}
 
@@ -296,7 +297,6 @@
       <button data-tab="today" class="active">Today</button>
       <button data-tab="week">This Week</button>
       <button data-tab="volume">Mileage &amp; Hours</button>
-      <button data-tab="log">Log Workout</button>
       <button data-tab="trends">Load Trends</button>
       <button data-tab="zones">Zones</button>
     </nav>
@@ -359,33 +359,6 @@
       </div>
     </section>
 
-    <section class="view" id="view-log">
-      <div class="card">
-        <h2 class="plain">Log a session</h2>
-        <form class="logform" id="logForm">
-          <div><label>Date</label><input type="date" id="lf-date" required></div>
-          <div><label>Sport</label>
-            <select id="lf-sport"><option>Swim</option><option>Bike</option><option>Run</option><option>Strength</option><option>Other</option></select>
-          </div>
-          <div><label>Duration (min)</label><input type="number" id="lf-duration" min="0"></div>
-          <div><label>Distance (m)</label><input type="number" id="lf-distance" min="0"></div>
-          <div><label>Avg HR</label><input type="number" id="lf-hr" min="0"></div>
-          <div><label>Effort</label>
-            <select id="lf-effort"><option>Very light</option><option>Light</option><option selected>Moderate</option><option>Intense</option><option>Very intense</option></select>
-          </div>
-          <div class="full"><label>Notes</label><textarea id="lf-notes" placeholder="How it felt, splits, anything worth remembering"></textarea></div>
-          <button type="submit">Save session</button>
-        </form>
-        <div class="note-box" style="margin-top:18px;">
-          This saves straight to your synced database, so it shows up on every device. It doesn't push back to intervals.icu — this form is just for quick manual notes. Actual completed workouts (time, distance, HR, load) pull in automatically from intervals.icu via the "Sync intervals.icu" button in the sidebar.
-        </div>
-      </div>
-      <div class="card">
-        <h2 class="plain">Logged here</h2>
-        <div class="logged-list" id="loggedList"></div>
-      </div>
-    </section>
-
     <section class="view" id="view-trends">
       <div class="card">
         <h2 class="plain">Fitness, fatigue, form — last 32 days</h2>
@@ -399,7 +372,7 @@
       <div class="card">
         <h2 class="plain">Recent completed sessions</h2>
         <table class="recent-table">
-          <thead><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th></tr></thead>
+          <thead><tr><th>Date</th><th>Sport</th><th>Time</th><th>Distance</th><th>Load</th></tr></thead>
           <tbody id="recentBody"></tbody>
         </table>
       </div>
@@ -460,8 +433,8 @@
 
 <script>
 // ---------- Supabase config — fill these in from your Supabase project settings ----------
-const SUPABASE_URL = "https://owvkjbzwpjmaelgawjey.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_hNejJAJ15lqYhVXOTa-L5w_AIWAU01f";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 let supa = null;
 try {
   if (SUPABASE_URL !== "YOUR_SUPABASE_URL" && window.supabase) {
@@ -531,16 +504,16 @@ let wellness = [
   {d:"2026-09-05",ctl:45.5,atl:69.8,tsb:-24.3},{d:"2026-09-06",ctl:44.9,atl:62.8,tsb:-17.9},
 ];
 let recentDone = [
-  {d:"2026-09-07",sport:"Swim",detail:"Pool Swim",min:22.3,load:11},
-  {d:"2026-09-06",sport:"Bike",detail:"Buffalo Grove Cycling",min:44,load:17},
-  {d:"2026-09-05",sport:"Bike",detail:"Buffalo Grove Cycling",min:141.8,load:113},
-  {d:"2026-09-04",sport:"Strength",detail:"Strength",min:47.2,load:15},
-  {d:"2026-09-04",sport:"Swim",detail:"Pool Swim",min:22.9,load:11},
-  {d:"2026-09-04",sport:"Run",detail:"Buffalo Grove Running",min:59.9,load:54},
-  {d:"2026-09-03",sport:"Strength",detail:"Strength",min:66,load:20},
-  {d:"2026-09-03",sport:"Swim",detail:"Pool Swim",min:18.2,load:11},
-  {d:"2026-09-02",sport:"Bike",detail:"Buffalo Grove Cycling",min:76.3,load:62},
-  {d:"2026-09-02",sport:"Strength",detail:"Strength",min:29.2,load:14},
+  {d:"2026-09-07",sport:"Swim",detail:"Pool Swim",min:22.3,load:11,dist:1100},
+  {d:"2026-09-06",sport:"Bike",detail:"Buffalo Grove Cycling",min:44,load:17,dist:16541.1},
+  {d:"2026-09-05",sport:"Bike",detail:"Buffalo Grove Cycling",min:141.8,load:113,dist:59597.6},
+  {d:"2026-09-04",sport:"Strength",detail:"Strength",min:47.2,load:15,dist:null},
+  {d:"2026-09-04",sport:"Swim",detail:"Pool Swim",min:22.9,load:11,dist:1050},
+  {d:"2026-09-04",sport:"Run",detail:"Buffalo Grove Running",min:59.9,load:54,dist:8787.4},
+  {d:"2026-09-03",sport:"Strength",detail:"Strength",min:66,load:20,dist:null},
+  {d:"2026-09-03",sport:"Swim",detail:"Pool Swim",min:18.2,load:11,dist:800},
+  {d:"2026-09-02",sport:"Bike",detail:"Buffalo Grove Cycling",min:76.3,load:62,dist:33005.2},
+  {d:"2026-09-02",sport:"Strength",detail:"Strength",min:29.2,load:14,dist:null},
 ];
 const historicalDays = {
   "2026-09-06": {label:"Sat, Sep 6", sessions:[
@@ -712,6 +685,18 @@ function renderToday(){
         <div class="stat"><div class="k">Fitness (CTL)</div><div class="v">${latest.ctl.toFixed(1)}</div></div>
         <div class="stat"><div class="k">Fatigue (ATL)</div><div class="v">${latest.atl.toFixed(1)}</div></div>
         <div class="stat ${latest.tsb<0?'tsb-neg':'tsb-pos'}"><div class="k">Form (TSB)</div><div class="v">${latest.tsb.toFixed(1)}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>What these mean</h2>
+      <div class="obs" style="margin-top:0;">
+        <strong style="color:var(--paper);">Fitness (CTL)</strong> — your rolling 42-day training load average. Rises slowly as consistent volume builds up over weeks.
+      </div>
+      <div class="obs">
+        <strong style="color:var(--paper);">Fatigue (ATL)</strong> — your rolling 7-day training load average. Reacts fast — a couple of hard days spikes it, a couple of easy days drops it.
+      </div>
+      <div class="obs">
+        <strong style="color:var(--paper);">Form (TSB)</strong> — Fitness minus Fatigue. Deeply negative means you're carrying a lot of unrecovered fatigue (good during a hard block, risky if it lingers). Near zero or positive means you're fresh — ideal heading into a race or key session.
       </div>
     </div>
     <div class="card"><h2>Coming up</h2>${upcomingHtml}</div>
@@ -892,51 +877,19 @@ function renderChart(){
   </svg>`;
   document.getElementById("chartHolder").innerHTML = svg;
 }
+function formatDist(sport, meters){
+  if(meters == null) return '—';
+  if(sport === 'Swim') return Math.round(meters).toLocaleString() + ' m';
+  return (meters / 1609.34).toFixed(1) + ' mi';
+}
 function renderRecent(){
   document.getElementById("recentBody").innerHTML = recentDone.slice(0,10).map(r => `
-    <tr><td>${r.d.slice(5)}</td><td class="name">${r.sport} — ${r.detail}</td><td>${r.min}m</td><td>${r.load}</td></tr>
+    <tr><td>${r.d.slice(5)}</td><td class="name">${r.sport} — ${r.detail}</td><td>${r.min}m</td><td>${formatDist(r.sport, r.dist)}</td><td>${r.load}</td></tr>
   `).join("");
 }
 
 document.querySelectorAll('nav.sidenav button').forEach(btn=>{
   btn.addEventListener('click', ()=> openTab(btn.dataset.tab));
-});
-
-async function loadLogs(){
-  const raw = await storeGet('workout-logs');
-  try{ return raw ? JSON.parse(raw) : []; }catch(e){ return []; }
-}
-async function saveLogs(logs){ await storeSet('workout-logs', JSON.stringify(logs)); }
-async function renderLogs(){
-  const logs = await loadLogs();
-  const el = document.getElementById('loggedList');
-  if(!logs.length){ el.innerHTML = '<div class="empty-note">Nothing logged here yet.</div>'; return; }
-  el.innerHTML = logs.slice().reverse().map(l => `
-    <div class="logged-item">
-      <div>
-        <div>${l.sport} ${l.notes ? '— ' + l.notes.slice(0,60) : ''}</div>
-        <div class="l-meta">${l.date} · ${l.duration||'—'} min ${l.distance?('· '+l.distance+'m'):''} ${l.hr?('· HR '+l.hr):''} · ${l.effort}</div>
-      </div>
-    </div>`).join("");
-}
-document.getElementById('lf-date').valueAsDate = now;
-document.getElementById('logForm').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const entry = {
-    date: document.getElementById('lf-date').value,
-    sport: document.getElementById('lf-sport').value,
-    duration: document.getElementById('lf-duration').value,
-    distance: document.getElementById('lf-distance').value,
-    hr: document.getElementById('lf-hr').value,
-    effort: document.getElementById('lf-effort').value,
-    notes: document.getElementById('lf-notes').value,
-  };
-  const logs = await loadLogs();
-  logs.push(entry);
-  await saveLogs(logs);
-  e.target.reset();
-  document.getElementById('lf-date').valueAsDate = now;
-  renderLogs();
 });
 
 async function syncFromIntervals(){
@@ -963,7 +916,8 @@ async function syncFromIntervals(){
         sport: a.type || 'Other',
         detail: a.name || a.type || '',
         min: a.moving_time ? +(a.moving_time/60).toFixed(1) : 0,
-        load: a.icu_training_load != null ? Math.round(a.icu_training_load) : 0
+        load: a.icu_training_load != null ? Math.round(a.icu_training_load) : 0,
+        dist: a.distance != null ? a.distance : null
       }))
       .sort((a,b)=> b.d.localeCompare(a.d));
     if(newDone.length) recentDone = newDone.slice(0,10);
@@ -1004,7 +958,6 @@ if('serviceWorker' in navigator){
   renderToday();
   renderWeek();
   renderChart();
-  renderLogs();
   renderRecent();
   syncFromIntervals(); // best-effort background refresh; silently no-ops until API/DB are configured
 })();
