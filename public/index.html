@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tri Log</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0A1815">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --ink:#0A1815;
+    --surface:#0F211D;
+    --surface-2:#14282350;
+    --surface-3:#1A322B;
+    --line: rgba(238,241,236,0.09);
+    --line-2: rgba(238,241,236,0.16);
+    --paper:#EEF1EC;
+    --paper-dim: rgba(238,241,236,0.60);
+    --paper-faint: rgba(238,241,236,0.36);
+    --coral:#C1652E;
+    --coral-dim: rgba(193,101,46,0.14);
+    --sage:#5FAE6E;
+    --teal:#4C86D6;
+    --amber:#F2C14E;
+    --radius: 12px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 100% 0%, rgba(76,134,214,0.09), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 0% 100%, rgba(193,101,46,0.07), transparent 55%),
+      var(--ink);
+    color:var(--paper);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .display{font-family:'Barlow Condensed',sans-serif; letter-spacing:0.01em;}
+
+  .app{display:flex; min-height:100vh;}
+
+  .sidebar{
+    width:250px; flex-shrink:0; padding:32px 22px;
+    display:flex; flex-direction:column;
+    border-right:1px solid var(--line);
+    background:rgba(15,33,29,0.5);
+  }
+  .brand h1{font-size:36px; font-weight:600; margin:0; line-height:1;}
+  .brand .sub{color:var(--paper-dim); font-size:14px; margin-top:9px; line-height:1.45;}
+  .phase-tag{
+    position:relative; display:inline-block; margin-top:14px;
+    font-size:12.5px; font-weight:600; color:var(--amber);
+    padding:5px 12px; border-radius:100px; cursor:default;
+    background:rgba(242,193,78,0.10); border:1px solid rgba(242,193,78,0.30);
+  }
+  .phase-tag .bubble{
+    position:absolute; left:0; top:calc(100% + 8px); z-index:20;
+    width:190px;
+    background:var(--surface-3); border:1px solid var(--line-2); border-radius:9px;
+    padding:10px 12px; font-size:12.5px; color:var(--paper-dim); line-height:1.5;
+    opacity:0; pointer-events:none; transform:translateY(-4px);
+    transition:opacity .15s ease, transform .15s ease;
+    box-shadow:0 10px 24px rgba(0,0,0,0.4);
+  }
+  .phase-tag:hover .bubble{opacity:1; transform:translateY(0);}
+
+  nav.sidenav{display:flex; flex-direction:column; gap:2px; margin-top:36px;}
+  nav.sidenav button{
+    text-align:left; background:none; border:none; color:var(--paper-dim);
+    font-family:'Inter',sans-serif; font-size:14.5px; font-weight:500;
+    padding:10px 12px; cursor:pointer; border-radius:8px;
+    border-left:2px solid transparent;
+    transition:background .15s ease, color .15s ease;
+  }
+  nav.sidenav button:hover{color:var(--paper); background:var(--surface-3);}
+  nav.sidenav button.active{color:var(--paper); background:var(--surface-3); border-left-color:var(--coral);}
+
+  .side-form{margin-top:auto; padding-top:22px; border-top:1px solid var(--line);}
+  .side-form .label{font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--paper-faint); margin-bottom:10px;}
+  .side-stat{display:flex; justify-content:space-between; align-items:baseline; padding:5px 0;}
+  .side-stat .k{font-size:12.5px; color:var(--paper-dim);}
+  .side-stat .v{font-family:'Barlow Condensed',sans-serif; font-size:19px; font-weight:600;}
+  .side-stat.tsb-neg .v{color:var(--coral);}
+  .side-stat.tsb-pos .v{color:var(--sage);}
+
+  .main{flex:1; min-width:0; padding:48px 56px 64px; min-height:100vh; display:flex; flex-direction:column;}
+  .main-inner{max-width:780px; width:100%;}
+
+  section.view{display:none;}
+  section.view.active{display:block; animation:fadeIn .3s ease;}
+  #view-today.active{display:flex; flex-direction:column; justify-content:center; flex:1;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+
+  .card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:24px 26px; margin-bottom:18px;
+  }
+  .card h2{font-size:12.5px; text-transform:uppercase; font-weight:600; letter-spacing:0.07em; color:var(--paper-faint); margin:0 0 16px;}
+  .card h2.plain{text-transform:none; letter-spacing:0; font-size:17px; color:var(--paper); font-weight:600;}
+
+  .today-eyebrow{color:var(--paper-dim); font-size:13.5px; margin-bottom:10px;}
+  .today-hero-name{font-family:'Barlow Condensed',sans-serif; font-size:54px; font-weight:600; line-height:1.02; margin-bottom:6px;}
+  .today-hero-meta{color:var(--paper-dim); font-size:15px; margin-bottom:22px;}
+  .today-sessions{display:flex; flex-direction:column; gap:10px; margin-bottom:26px;}
+  .today-empty{color:var(--paper-dim); font-size:15px; line-height:1.6; margin-bottom:26px;}
+
+  .status-pill{
+    font-size:12px; font-weight:600; padding:5px 12px; border-radius:100px;
+    border:1px solid var(--line); display:inline-block;
+  }
+  .status-pill.done{color:var(--sage); border-color: rgba(95,174,110,0.35); background:rgba(95,174,110,0.08);}
+  .status-pill.planned{color:var(--amber); border-color: rgba(242,193,78,0.35); background:rgba(242,193,78,0.08);}
+
+  .stat-row{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  .stat{background:var(--surface-3); border-radius:var(--radius); padding:18px 20px;}
+  .stat .k{font-size:12.5px; color:var(--paper-dim); margin-bottom:8px;}
+  .stat .v{font-family:'Barlow Condensed',sans-serif; font-size:34px; font-weight:600;}
+  .stat.tsb-neg .v{color:var(--coral);}
+  .stat.tsb-pos .v{color:var(--sage);}
+
+  .obs{font-size:14.5px; color:var(--paper-dim); line-height:1.6; margin-top:10px; border-left:2px solid var(--line-2); padding-left:14px;}
+
+  /* Week */
+  .day-row{display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--line);}
+  .day-row:last-child{border-bottom:none;}
+  .day-col{width:58px; flex-shrink:0;}
+  .day-col .dow{font-size:12px; color:var(--paper-dim);}
+  .day-col .dom{font-family:'Barlow Condensed',sans-serif; font-size:26px; font-weight:600;}
+  .day-row.today .dom{color:var(--coral);}
+  .day-sessions{flex:1; display:flex; flex-direction:column; gap:6px; min-height:14px;}
+  .day-sessions.drag-over{background:var(--surface-3); border-radius:8px; outline:1px dashed var(--line-2);}
+  .sess{
+    position:relative; display:flex; align-items:center; gap:10px;
+    font-size:14.5px; cursor:grab; padding:8px 10px; margin:0 -10px; border-radius:8px;
+    transition:background .15s ease;
+  }
+  .sess:hover{background:var(--surface-3);}
+  .sess.dragging{opacity:0.35;}
+  .sess .name{font-weight:500; flex:1;}
+  .sess.is-done .name{color:var(--paper-dim); text-decoration:line-through; text-decoration-color:var(--line-2);}
+  .sess .dur{color:var(--paper-dim); font-size:13px; flex-shrink:0;}
+  .day-row.today{background:var(--coral-dim); margin:0 -16px; padding:16px; border-radius:10px;}
+
+  .icon-btn{
+    background:none; border:none; color:var(--paper-faint); cursor:pointer;
+    font-size:14px; padding:2px 5px; border-radius:5px; flex-shrink:0; line-height:1;
+  }
+  .icon-btn:hover{color:var(--paper); background:var(--surface-2);}
+
+  .add-btn{
+    background:none; border:1px dashed var(--line-2); color:var(--paper-dim);
+    font-size:13px; padding:8px 10px; border-radius:8px; cursor:pointer; margin-top:2px; text-align:left;
+  }
+  .add-btn:hover{color:var(--paper); border-color:var(--paper-faint);}
+
+  .inline-form{background:var(--surface-3); border-radius:8px; padding:12px; margin:4px 0; display:flex; flex-direction:column; gap:8px;}
+  .inline-form input, .inline-form textarea{
+    width:100%; background:var(--surface); border:1px solid var(--line-2); color:var(--paper);
+    border-radius:6px; padding:8px 9px; font-family:'Inter',sans-serif; font-size:13.5px;
+  }
+  .inline-form textarea{min-height:50px; resize:vertical;}
+  .inline-form .row{display:flex; gap:8px;}
+  .inline-form .row input:first-child{flex:2;}
+  .inline-form .row input:last-child{flex:1;}
+  .inline-form .actions{display:flex; gap:8px; justify-content:flex-end;}
+  .inline-form .actions button{
+    font-size:13px; padding:7px 14px; border-radius:6px; border:none; cursor:pointer; font-weight:600;
+  }
+  .inline-form .save{background:var(--coral); color:#fff;}
+  .inline-form .cancel{background:none; color:var(--paper-dim); border:1px solid var(--line-2) !important;}
+
+  .toggle{
+    position:relative; width:36px; height:21px; border-radius:20px; flex-shrink:0;
+    background:var(--surface-3); border:1px solid var(--line-2); cursor:pointer;
+    transition:background .2s ease, border-color .2s ease;
+  }
+  .toggle::after{content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:var(--paper-faint); transition:transform .2s ease, background .2s ease;}
+  .toggle.on{background:rgba(95,174,110,0.22); border-color:rgba(95,174,110,0.5);}
+  .toggle.on::after{transform:translateX(15px); background:var(--sage);}
+
+  .sess .bubble{
+    position:absolute; left:0; bottom:calc(100% + 8px); z-index:20;
+    width:280px; max-width:70vw;
+    background:var(--surface-3); border:1px solid var(--line-2); border-radius:9px;
+    padding:12px 14px; font-size:13px; color:var(--paper-dim); line-height:1.55;
+    opacity:0; pointer-events:none; transform:translateY(4px);
+    transition:opacity .15s ease, transform .15s ease;
+    box-shadow:0 10px 24px rgba(0,0,0,0.4);
+  }
+  .sess .bubble::after{content:""; position:absolute; top:100%; left:20px; border:6px solid transparent; border-top-color:var(--surface-3);}
+  .sess:hover .bubble{opacity:1; transform:translateY(0); pointer-events:auto;}
+  .sess .bubble .b-dur{color:var(--paper); font-weight:600; font-size:12px; margin-bottom:5px; display:block;}
+  .bubble-edit{
+    position:absolute; top:8px; right:10px; background:none; border:1px solid var(--line-2);
+    color:var(--paper-dim); font-size:11px; font-weight:600; padding:3px 9px; border-radius:100px;
+    cursor:pointer; pointer-events:auto;
+  }
+  .bubble-edit:hover{color:var(--paper); border-color:var(--paper-faint);}
+
+  .detail-back{background:none; border:none; color:var(--paper-dim); font-family:'Inter',sans-serif; font-size:13.5px; cursor:pointer; padding:0; margin-bottom:18px; display:inline-flex; align-items:center; gap:6px;}
+  .detail-back:hover{color:var(--paper);}
+  .detail-head{font-family:'Barlow Condensed',sans-serif; font-size:32px; font-weight:600; margin-bottom:6px;}
+  .detail-sub{color:var(--paper-dim); font-size:14.5px; margin-bottom:20px; display:flex; align-items:center; gap:12px;}
+  .detail-body{font-size:15.5px; line-height:1.75; color:var(--paper-dim); margin-bottom:20px;}
+  .detail-actions{display:flex; gap:10px;}
+  .detail-actions button{font-size:13.5px; padding:9px 16px; border-radius:7px; cursor:pointer; font-weight:600; border:1px solid var(--line-2); background:none; color:var(--paper-dim);}
+  .detail-actions button:hover{color:var(--paper);}
+  .detail-actions button.danger:hover{color:var(--coral); border-color:var(--coral);}
+
+  form.logform{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  form.logform .full{grid-column:1/-1;}
+  form.logform label{font-size:12.5px; color:var(--paper-dim); display:block; margin-bottom:6px;}
+  form.logform input, form.logform select, form.logform textarea{
+    width:100%; background:var(--surface-3); border:1px solid var(--line-2); color:var(--paper);
+    border-radius:8px; padding:10px 11px; font-family:'Inter',sans-serif; font-size:14px;
+  }
+  form.logform textarea{resize:vertical; min-height:60px;}
+  form.logform button{grid-column:1/-1; background:var(--coral); color:#fff; border:none; border-radius:8px; padding:12px; font-size:14.5px; font-weight:600; cursor:pointer; margin-top:4px;}
+  form.logform button:hover{background:#a8551f;}
+  .logged-list{margin-top:6px;}
+  .logged-item{display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .logged-item .l-meta{color:var(--paper-dim); font-size:13px;}
+  .empty-note{color:var(--paper-faint); font-size:13.5px; font-style:italic;}
+  .storage-warn{
+    background:rgba(193,101,46,0.10); border:1px solid rgba(193,101,46,0.3);
+    border-radius:9px; padding:10px 14px; font-size:12.5px; color:var(--paper-dim); margin-bottom:14px; display:none;
+  }
+
+  .legend{display:flex; gap:18px; margin-bottom:12px; font-size:12.5px; color:var(--paper-dim);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+  .recent-table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  .recent-table th{text-align:left; color:var(--paper-dim); font-weight:500; padding:7px 9px; border-bottom:1px solid var(--line); font-size:12px;}
+  .recent-table td{padding:8px 9px; border-bottom:1px solid var(--line); color:var(--paper-dim);}
+  .recent-table td.name{color:var(--paper);}
+
+  .zone-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;}
+  .zone-card .icon-label{font-size:12px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em;}
+  .zone-card .big{font-family:'Barlow Condensed',sans-serif; font-size:30px; font-weight:600; margin:8px 0 3px;}
+  .zone-card .small{font-size:13px; color:var(--paper-dim);}
+
+  .ztable{width:100%; border-collapse:collapse; font-size:14px;}
+  .ztable th{text-align:left; color:var(--paper-faint); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; padding:8px 10px; border-bottom:1px solid var(--line-2);}
+  .ztable td{padding:10px 10px; border-bottom:1px solid var(--line);}
+  .ztable td.zname{font-weight:600;}
+  .ztable td.zrange{color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-size:16px;}
+  .zbar{width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:8px;}
+
+  .vol-row{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px 0; border-bottom:1px solid var(--line);}
+  .vol-row:last-child{border-bottom:none;}
+  .vol-label .name{font-family:'Barlow Condensed',sans-serif; font-size:22px; font-weight:600;}
+  .vol-label .range{color:var(--paper-dim); font-size:13px; margin-top:2px;}
+  .vol-nums{display:flex; gap:28px; flex-shrink:0;}
+  .vol-num{text-align:right;}
+  .vol-num .v{font-family:'Barlow Condensed',sans-serif; font-size:30px; font-weight:600;}
+  .vol-num .k{font-size:11.5px; color:var(--paper-faint); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px;}
+
+  .note-box{background:rgba(76,134,214,0.07); border:1px solid rgba(76,134,214,0.25); border-radius:var(--radius); padding:16px 18px; font-size:13.5px; color:var(--paper-dim); line-height:1.55;}
+
+  @media(max-width:820px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%; flex-direction:row; align-items:center; padding:16px 20px; gap:20px; overflow-x:auto;}
+    .brand .sub{display:none;}
+    nav.sidenav{flex-direction:row; margin-top:0;}
+    .side-form{display:none;}
+    .main{padding:28px 20px 60px;}
+    .stat-row{grid-template-columns:1fr 1fr 1fr;}
+    .today-hero-name{font-size:36px;}
+  }
+  @media(max-width:600px){
+    .stat-row{grid-template-columns:1fr 1fr;}
+    .zone-grid{grid-template-columns:1fr;}
+    form.logform{grid-template-columns:1fr;}
+    .vol-row{flex-direction:column; align-items:flex-start; gap:10px;}
+    .vol-nums{width:100%; justify-content:space-between;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <h1 class="display">Tri Log</h1>
+      <div class="sub">40-week build → Ironman 70.3 Chattanooga, May 2027</div>
+      <div class="phase-tag">
+        Phase 1 — Base
+        <div class="bubble">Jul – Oct 2026<br>Aerobic volume, technique (swim especially), general strength</div>
+      </div>
+    </div>
+    <nav class="sidenav">
+      <button data-tab="today" class="active">Today</button>
+      <button data-tab="week">This Week</button>
+      <button data-tab="volume">Mileage &amp; Hours</button>
+      <button data-tab="log">Log Workout</button>
+      <button data-tab="trends">Load Trends</button>
+      <button data-tab="zones">Zones</button>
+    </nav>
+    <div class="side-form" id="sideForm"></div>
+  </aside>
+
+  <main class="main">
+  <div class="main-inner">
+
+    <div class="storage-warn" id="storageWarn">
+      Heads up: this browser/viewer isn't persisting saved data right now (logs, toggles, and edits won't stick between visits here). Open this from the Claude app/chat directly for it to save properly.
+    </div>
+
+    <section class="view active" id="view-today"></section>
+
+    <section class="view" id="view-week">
+      <div class="card">
+        <h2 class="plain">Sep 7 – Sep 13</h2>
+        <div id="weekList"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-volume">
+      <div class="card">
+        <h2 class="plain">Miles &amp; hours</h2>
+        <div class="vol-row">
+          <div class="vol-label"><div class="name">Weekly</div><div class="range">Trailing 7 days · Sep 1–7</div></div>
+          <div class="vol-nums">
+            <div class="vol-num"><div class="v">10.6</div><div class="k">Hours</div></div>
+            <div class="vol-num"><div class="v">84.6</div><div class="k">Miles</div></div>
+          </div>
+        </div>
+        <div class="vol-row">
+          <div class="vol-label"><div class="name">Monthly</div><div class="range">September, to date</div></div>
+          <div class="vol-nums">
+            <div class="vol-num"><div class="v">9.5</div><div class="k">Hours</div></div>
+            <div class="vol-num"><div class="v">80.1</div><div class="k">Miles</div></div>
+          </div>
+        </div>
+        <div class="vol-row">
+          <div class="vol-label"><div class="name">Yearly</div><div class="range">Since tracking began, Jun 27</div></div>
+          <div class="vol-nums">
+            <div class="vol-num"><div class="v">47.5</div><div class="k">Hours</div></div>
+            <div class="vol-num"><div class="v">419.6</div><div class="k">Miles</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="note-box">
+        Pulled from your Notion Workout Log (swim + bike + run distance combined). "Yearly" reads "since tracking began" rather than Jan 1, since that's as far back as your logged data goes. Ask me to refresh this any time you want current numbers.
+      </div>
+    </section>
+
+    <section class="view" id="view-detail">
+      <button class="detail-back" id="detailBack">&larr; Back to This Week</button>
+      <div class="card">
+        <div class="detail-head" id="detailName"></div>
+        <div class="detail-sub" id="detailMeta"></div>
+        <div class="detail-body" id="detailBody"></div>
+        <div class="detail-actions" id="detailActions"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-log">
+      <div class="card">
+        <h2 class="plain">Log a session</h2>
+        <form class="logform" id="logForm">
+          <div><label>Date</label><input type="date" id="lf-date" required></div>
+          <div><label>Sport</label>
+            <select id="lf-sport"><option>Swim</option><option>Bike</option><option>Run</option><option>Strength</option><option>Other</option></select>
+          </div>
+          <div><label>Duration (min)</label><input type="number" id="lf-duration" min="0"></div>
+          <div><label>Distance (m)</label><input type="number" id="lf-distance" min="0"></div>
+          <div><label>Avg HR</label><input type="number" id="lf-hr" min="0"></div>
+          <div><label>Effort</label>
+            <select id="lf-effort"><option>Very light</option><option>Light</option><option selected>Moderate</option><option>Intense</option><option>Very intense</option></select>
+          </div>
+          <div class="full"><label>Notes</label><textarea id="lf-notes" placeholder="How it felt, splits, anything worth remembering"></textarea></div>
+          <button type="submit">Save session</button>
+        </form>
+        <div class="note-box" style="margin-top:18px;">
+          This saves straight to your synced database, so it shows up on every device. It doesn't push back to intervals.icu — this form is just for quick manual notes. Actual completed workouts (time, distance, HR, load) pull in automatically from intervals.icu via the "Sync intervals.icu" button in the sidebar.
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="plain">Logged here</h2>
+        <div class="logged-list" id="loggedList"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-trends">
+      <div class="card">
+        <h2 class="plain">Fitness, fatigue, form — last 32 days</h2>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--teal)"></i>CTL (fitness)</span>
+          <span><i class="dot" style="background:var(--coral)"></i>ATL (fatigue)</span>
+          <span><i class="dot" style="background:var(--amber)"></i>TSB (form)</span>
+        </div>
+        <div id="chartHolder"></div>
+      </div>
+      <div class="card">
+        <h2 class="plain">Recent completed sessions</h2>
+        <table class="recent-table">
+          <thead><tr><th>Date</th><th>Sport</th><th>Time</th><th>Load</th></tr></thead>
+          <tbody id="recentBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="view" id="view-zones">
+      <div class="card">
+        <h2 class="plain">Thresholds</h2>
+        <div class="zone-grid">
+          <div class="zone-card"><div class="icon-label">Swim</div><div class="big">2:28<span style="font-size:14px; color:var(--paper-dim);">/100m</span></div><div class="small">Critical swim speed (CSS)</div></div>
+          <div class="zone-card"><div class="icon-label">Bike</div><div class="big">201W</div><div class="small">FTP · ~2.6–2.7 W/kg</div></div>
+          <div class="zone-card"><div class="icon-label">Run</div><div class="big">177<span style="font-size:14px; color:var(--paper-dim);"> bpm</span></div><div class="small">LTHR · 8:15/mi threshold pace</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="plain">Heart rate zones — run (based on LTHR 177 bpm)</h2>
+        <table class="ztable">
+          <thead><tr><th>Zone</th><th>% LTHR</th><th>BPM</th></tr></thead>
+          <tbody>
+            <tr><td class="zname"><span class="zbar" style="background:#6FA8DC"></span>Z1 — Recovery</td><td>&lt;81%</td><td class="zrange">&lt;143</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:var(--sage)"></span>Z2 — Aerobic</td><td>81–89%</td><td class="zrange">143–157</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:var(--amber)"></span>Z3 — Tempo</td><td>90–94%</td><td class="zrange">158–166</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:var(--coral)"></span>Z4 — Threshold</td><td>95–99%</td><td class="zrange">167–175</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:#B23A3A"></span>Z5 — VO2max / Anaerobic</td><td>100%+</td><td class="zrange">176+</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2 class="plain">Power zones — bike (Coggan model, FTP 201W)</h2>
+        <table class="ztable">
+          <thead><tr><th>Zone</th><th>% FTP</th><th>Watts</th><th>Approx HR*</th></tr></thead>
+          <tbody>
+            <tr><td class="zname"><span class="zbar" style="background:#6FA8DC"></span>Z1 — Active Recovery</td><td>&lt;55%</td><td class="zrange">&lt;111</td><td class="zrange">&lt;136</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:var(--sage)"></span>Z2 — Endurance</td><td>56–75%</td><td class="zrange">113–151</td><td class="zrange">136–150</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:var(--amber)"></span>Z3 — Tempo</td><td>76–90%</td><td class="zrange">153–181</td><td class="zrange">151–158</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:var(--coral)"></span>Z4 — Threshold</td><td>91–105%</td><td class="zrange">183–211</td><td class="zrange">160–166</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:#B23A3A"></span>Z5 — VO2max</td><td>106–120%</td><td class="zrange">213–241</td><td class="zrange">168–174</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:#7B3FA0"></span>Z6 — Anaerobic Capacity</td><td>121–150%</td><td class="zrange">243–302</td><td class="zrange">175+</td></tr>
+            <tr><td class="zname"><span class="zbar" style="background:#4B2E5A"></span>Z7 — Neuromuscular</td><td>&gt;150%</td><td class="zrange">302+</td><td class="zrange">—</td></tr>
+          </tbody>
+        </table>
+        <div class="obs" style="margin-top:14px;">
+          *Estimated from your Jul 17 20-min TT (avg HR 168, max 179) since you don't ride with a power meter outdoors — bike threshold HR here is ~168. Worth knowing: your own note on that test flagged quad fatigue as the limiter, not cardio, so 168 may run a touch low as a true threshold. Power stays the more reliable number for indoor/Kickr rides; use the HR column as your outdoor guide.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="plain">Gear</h2>
+        <div class="obs" style="margin-top:0;">Garmin Forerunner 255 · Wahoo Kickr Core · SAVA A7L PRO (Shimano 105, 12-speed) · Garmin Edge 820</div>
+      </div>
+    </section>
+
+  </div>
+  </main>
+</div>
+
+<script>
+// ---------- Supabase config — fill these in from your Supabase project settings ----------
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+let supa = null;
+try {
+  if (SUPABASE_URL !== "YOUR_SUPABASE_URL" && window.supabase) {
+    supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (e) { console.warn('Supabase init failed', e); }
+
+// ---------- Storage abstraction: try window.storage (Claude artifact bridge), fall back to localStorage ----------
+let storageMode = 'unknown';
+async function storeGet(key){
+  if(supa){
+    try{
+      const { data, error } = await supa.from('kv_store').select('value').eq('key', key).maybeSingle();
+      if(!error){ storageMode = 'supabase'; return data ? JSON.stringify(data.value) : null; }
+    }catch(e){ /* fall through */ }
+  }
+  try{
+    if(window.storage && typeof window.storage.get === 'function'){
+      const res = await window.storage.get(key, false);
+      storageMode = storageMode==='supabase' ? storageMode : 'claude';
+      return res ? res.value : null;
+    }
+  }catch(e){ /* fall through */ }
+  try{
+    const v = localStorage.getItem(key);
+    if(storageMode !== 'supabase') storageMode = 'local';
+    return v;
+  }catch(e){ if(storageMode!=='supabase') storageMode = 'none'; return null; }
+}
+async function storeSet(key, value){
+  let ok = false;
+  if(supa){
+    try{
+      const { error } = await supa.from('kv_store').upsert({ key, value: JSON.parse(value) });
+      if(!error){ storageMode = 'supabase'; ok = true; }
+    }catch(e){ /* fall through */ }
+  }
+  // Always also write locally as an offline cache / fallback
+  try{
+    if(window.storage && typeof window.storage.set === 'function'){
+      await window.storage.set(key, value, false);
+      if(!ok){ storageMode = 'claude'; ok = true; }
+    }
+  }catch(e){ /* fall through */ }
+  try{ localStorage.setItem(key, value); if(!ok){ storageMode='local'; ok = true; } }catch(e){ if(!ok) storageMode='none'; }
+  if(storageMode === 'none') document.getElementById('storageWarn').style.display = 'block';
+  return ok;
+}
+
+// ---------- Seed data ----------
+let wellness = [
+  {d:"2026-08-06",ctl:8.0,atl:28.6,tsb:-20.6},{d:"2026-08-07",ctl:38.5,atl:33.5,tsb:5.0},
+  {d:"2026-08-08",ctl:40.2,atl:45.4,tsb:-5.2},{d:"2026-08-09",ctl:39.3,atl:39.3,tsb:-0.1},
+  {d:"2026-08-10",ctl:38.3,atl:35.7,tsb:2.6},{d:"2026-08-11",ctl:38.2,atl:37.9,tsb:0.4},
+  {d:"2026-08-12",ctl:38.0,atl:38.6,tsb:-0.6},{d:"2026-08-13",ctl:38.0,atl:38.7,tsb:-0.7},
+  {d:"2026-08-14",ctl:37.1,atl:33.6,tsb:3.6},{d:"2026-08-15",ctl:36.3,atl:29.1,tsb:7.2},
+  {d:"2026-08-16",ctl:37.2,atl:35.1,tsb:2.1},{d:"2026-08-17",ctl:37.0,atl:37.3,tsb:-0.4},
+  {d:"2026-08-18",ctl:37.6,atl:44.6,tsb:-7.1},{d:"2026-08-19",ctl:37.5,atl:46.7,tsb:-9.1},
+  {d:"2026-08-20",ctl:38.2,atl:49.2,tsb:-11.0},{d:"2026-08-21",ctl:41.4,atl:66.0,tsb:-24.6},
+  {d:"2026-08-22",ctl:40.4,atl:57.2,tsb:-16.8},{d:"2026-08-23",ctl:39.5,atl:49.6,tsb:-10.1},
+  {d:"2026-08-24",ctl:38.9,atl:45.1,tsb:-6.2},{d:"2026-08-25",ctl:39.7,atl:48.7,tsb:-9.0},
+  {d:"2026-08-26",ctl:40.7,atl:55.0,tsb:-14.3},{d:"2026-08-27",ctl:40.1,atl:53.0,tsb:-12.8},
+  {d:"2026-08-28",ctl:39.5,atl:49.7,tsb:-10.2},{d:"2026-08-29",ctl:43.8,atl:72.7,tsb:-29.0},
+  {d:"2026-08-30",ctl:42.7,atl:63.1,tsb:-20.3},{d:"2026-08-31",ctl:43.2,atl:62.8,tsb:-19.6},
+  {d:"2026-09-01",ctl:43.8,atl:63.5,tsb:-19.7},{d:"2026-09-02",ctl:44.2,atl:65.1,tsb:-21.0},
+  {d:"2026-09-03",ctl:43.4,atl:60.6,tsb:-17.2},{d:"2026-09-04",ctl:43.9,atl:63.2,tsb:-19.3},
+  {d:"2026-09-05",ctl:45.5,atl:69.8,tsb:-24.3},{d:"2026-09-06",ctl:44.9,atl:62.8,tsb:-17.9},
+];
+let recentDone = [
+  {d:"2026-09-07",sport:"Swim",detail:"Pool Swim",min:22.3,load:11},
+  {d:"2026-09-06",sport:"Bike",detail:"Buffalo Grove Cycling",min:44,load:17},
+  {d:"2026-09-05",sport:"Bike",detail:"Buffalo Grove Cycling",min:141.8,load:113},
+  {d:"2026-09-04",sport:"Strength",detail:"Strength",min:47.2,load:15},
+  {d:"2026-09-04",sport:"Swim",detail:"Pool Swim",min:22.9,load:11},
+  {d:"2026-09-04",sport:"Run",detail:"Buffalo Grove Running",min:59.9,load:54},
+  {d:"2026-09-03",sport:"Strength",detail:"Strength",min:66,load:20},
+  {d:"2026-09-03",sport:"Swim",detail:"Pool Swim",min:18.2,load:11},
+  {d:"2026-09-02",sport:"Bike",detail:"Buffalo Grove Cycling",min:76.3,load:62},
+  {d:"2026-09-02",sport:"Strength",detail:"Strength",min:29.2,load:14},
+];
+const historicalDays = {
+  "2026-09-06": {label:"Sat, Sep 6", sessions:[
+    {id:"sep6-bike", name:"Bike — Buffalo Grove Cycling", dur:"44 min", desc:"Logged from intervals.icu sync. Easy spin — form was deep in the red (TSB -17.9) after a big weekend block, so a short easy ride was the right call.", locked:true}
+  ]},
+  "2026-09-07": {label:"Mon, Sep 7", sessions:[
+    {id:"sep7-swim", name:"Swim — Pool Swim", dur:"22 min", desc:"Logged from intervals.icu sync. 1,100m technique swim, matches the planned CSS session.", locked:true}
+  ]}
+};
+
+const seedWeek = [
+  {dow:"Mon", dom:"7", iso:"2026-09-07", date:"Mon, Sep 7", sessions:[
+    {id:"mon-run", name:"Run (Z2 easy, optional)", dur:"25 min", desc:"Skippable gap-filler before swim. Do it when it feels right, not out of guilt."},
+    {id:"mon-swim", name:"Swim (technique)", dur:"40 min", desc:"Added to fill the swim gap this week. Week 2 CSS pace work. Drills: 6x25m fingertip drag. Main: 8x50m @ CSS pace (~1:14/50m) w/ 20s rest. Keep it easy, this is a technique day."}
+  ]},
+  {dow:"Tue", dom:"8", iso:"2026-09-08", date:"Tue, Sep 8", sessions:[
+    {id:"tue-run", name:"Run (hard) — negative split tempo", dur:"60 min", desc:"10min easy warmup, then 3 segments (~12-15min each) each faster than the last: steady (HR 155-160) → comfortably hard (HR 165-170) → hard, pushing toward LTHR ~177 (HR 170-177+). 5-10min easy cooldown."}
+  ]},
+  {dow:"Wed", dom:"9", iso:"2026-09-09", date:"Wed, Sep 9", sessions:[
+    {id:"wed-bike", name:"Bike (quality/FTP) — threshold", dur:"65 min", desc:"e.g. 4x8min at FTP with 3min easy recovery between, or steady 25-30min at threshold. Adjust based on how legs feel off Tuesday's hard run."}
+  ]},
+  {dow:"Thu", dom:"10", iso:"2026-09-10", date:"Thu, Sep 10", sessions:[
+    {id:"thu-swim", name:"Swim (technique, easy)", dur:"45 min", desc:"Week 2 — introducing CSS pace work. Drills: 6x25m fingertip drag. Main: 8x50m @ CSS pace (~1:14/50m) w/ 20s rest."},
+    {id:"thu-push", name:"Push (strength)", dur:"—", desc:"Weighted dips 4x8-10, close grip bench 3x10-12, lateral raise 3x12-15, cable pushdown 3x12-15."}
+  ]},
+  {dow:"Fri", dom:"11", iso:"2026-09-11", date:"Fri, Sep 11", sessions:[
+    {id:"fri-swim", name:"Swim (technique, evening)", dur:"45 min", desc:"Week 2 (CSS pace intro). Warmup 100m easy. Main: 10x50m @ CSS pace w/ 20s rest, 6x50m stroke-count/cadence drill, 3x50m kickboard. Cooldown 50-75m easy."},
+    {id:"fri-run", name:"Run (Z2 easy)", dur:"45 min", desc:"Easy aerobic run, keep it conversational — this is recovery, not a workout."},
+    {id:"fri-pull", name:"Pull (strength)", dur:"—", desc:"Pulldowns 3x6-8, barbell rows 3x6-8, cable rows to hips 2x10-12, lat pullovers 2x12-15, rear delts 2x15-20, EZ bar curl 3x10-12, incline DB curl 3x10-12, hammer curls 3x10-12."}
+  ]},
+  {dow:"Sat", dom:"12", iso:"2026-09-12", date:"Sat, Sep 12", sessions:[
+    {id:"sat-bike", name:"Long bike", dur:"140 min", desc:"Long ride, mostly Z2 (HR 143-150). Practice fueling — 75-90g carbs split into 2 doses."}
+  ]},
+  {dow:"Sun", dom:"13", iso:"2026-09-13", date:"Sun, Sep 13", sessions:[
+    {id:"sun-bike", name:"Bike (easy, recovery)", dur:"30 min", desc:"Easy active-recovery spin. Z1-Z2, low effort, no structure needed — just spin the legs."}
+  ]},
+];
+
+let weekState = [];
+const weekSessionsById = {};
+const flatUpcoming = [];
+
+function rebuildIndexes(){
+  for(const k in weekSessionsById) delete weekSessionsById[k];
+  flatUpcoming.length = 0;
+  weekState.forEach(day => day.sessions.forEach(s => {
+    weekSessionsById[s.id] = {...s, dayLabel:day.date, iso:day.iso};
+    flatUpcoming.push({...s, iso:day.iso, dayLabel:day.date});
+  }));
+  Object.keys(historicalDays).forEach(iso => historicalDays[iso].sessions.forEach(s => {
+    weekSessionsById[s.id] = {...s, dayLabel:historicalDays[iso].label, iso};
+  }));
+}
+
+async function loadWeekState(){
+  const raw = await storeGet('week-plan-v1');
+  if(raw){
+    try{ weekState = JSON.parse(raw); return; }catch(e){}
+  }
+  weekState = JSON.parse(JSON.stringify(seedWeek));
+  await storeSet('week-plan-v1', JSON.stringify(weekState));
+}
+async function saveWeekState(){
+  await storeSet('week-plan-v1', JSON.stringify(weekState));
+  rebuildIndexes();
+}
+
+function isoLocal(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+const now = new Date();
+const todayIso = isoLocal(now);
+
+let doneMap = {};
+async function loadDoneMap(){
+  const raw = await storeGet('session-done-v1');
+  try{ doneMap = raw ? JSON.parse(raw) : {}; }catch(e){ doneMap = {}; }
+}
+async function saveDoneMap(){ await storeSet('session-done-v1', JSON.stringify(doneMap)); }
+function isDone(id){ return !!doneMap[id]; }
+function toggleHtml(id, locked){
+  if(locked) return `<span class="status-pill done">Done</span>`;
+  return `<div class="toggle ${isDone(id)?'on':''}" data-toggle-id="${id}"></div>`;
+}
+function attachToggleHandlers(root){
+  root.querySelectorAll('[data-toggle-id]').forEach(el=>{
+    el.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const id = el.dataset.toggleId;
+      doneMap[id] = !doneMap[id];
+      el.classList.toggle('on', doneMap[id]);
+      el.closest('.sess')?.classList.toggle('is-done', doneMap[id]);
+      await saveDoneMap();
+    });
+  });
+}
+
+function getLatest(){ return wellness[wellness.length-1]; }
+function renderSideStat(){
+  const latest = getLatest();
+  document.getElementById("sideForm").innerHTML = `
+    <div class="label">Form right now</div>
+    <div class="side-stat"><span class="k">Fitness (CTL)</span><span class="v">${latest.ctl.toFixed(1)}</span></div>
+    <div class="side-stat"><span class="k">Fatigue (ATL)</span><span class="v">${latest.atl.toFixed(1)}</span></div>
+    <div class="side-stat ${latest.tsb<0?'tsb-neg':'tsb-pos'}"><span class="k">Form (TSB)</span><span class="v">${latest.tsb.toFixed(1)}</span></div>
+    <button id="syncBtn" style="margin-top:14px; width:100%; background:none; border:1px solid var(--line-2); color:var(--paper-dim); font-size:12px; padding:8px; border-radius:7px; cursor:pointer;">&#8635; Sync intervals.icu</button>
+    <div id="syncStatus" style="font-size:11px; color:var(--paper-faint); margin-top:6px;"></div>
+  `;
+  document.getElementById('syncBtn').addEventListener('click', syncFromIntervals);
+}
+
+function sessRowHtml(s){
+  return `
+    <div class="sess ${isDone(s.id)&&!s.locked?'is-done':''}" data-session-id="${s.id}" draggable="${s.locked?'false':'true'}">
+      ${toggleHtml(s.id, s.locked)}
+      <span class="name">${s.name}</span>
+      <span class="dur">${s.dur}</span>
+      <div class="bubble">
+        ${!s.locked ? `<button class="bubble-edit" data-edit-id="${s.id}">Edit</button>` : ''}
+        <span class="b-dur">${s.dur}</span>${s.desc}
+      </div>
+    </div>`;
+}
+
+function inlineFormHtml(dayIso, existing){
+  const s = existing || {name:'', dur:'', desc:''};
+  return `
+    <div class="inline-form" data-form-for-day="${dayIso}" data-editing-id="${existing?existing.id:''}">
+      <input type="text" class="f-name" placeholder="Workout name (e.g. Run — easy Z2)" value="${s.name.replace(/"/g,'&quot;')}">
+      <div class="row">
+        <input type="text" class="f-dur" placeholder="Duration (e.g. 45 min)" value="${s.dur.replace(/"/g,'&quot;')}">
+      </div>
+      <textarea class="f-desc" placeholder="Details — target zones, sets, notes">${s.desc}</textarea>
+      <div class="actions">
+        ${existing ? `<button type="button" class="delete-btn" style="margin-right:auto; color:var(--coral); border-color:transparent; background:none;" data-form-delete="${existing.id}">Delete</button>` : ''}
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save">${existing?'Save':'Add'}</button>
+      </div>
+    </div>`;
+}
+
+function renderToday(){
+  const el = document.getElementById('view-today');
+  const latest = getLatest();
+  const dayLabel = now.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
+  let sessions = [];
+  if(historicalDays[todayIso]){ sessions = historicalDays[todayIso].sessions; }
+  else { const wk = weekState.find(d => d.iso === todayIso); if(wk) sessions = wk.sessions; }
+
+  const sessionsHtml = sessions.map(sessRowHtml).join("");
+  const emptyHtml = !sessions.length ? `<div class="today-empty">No plan loaded for today yet — this dashboard currently covers Sep 6–13. Ask me to plan the next week and I'll refresh this.</div>` : "";
+
+  const upcoming = flatUpcoming.filter(s => s.iso > todayIso).sort((a,b)=> a.iso.localeCompare(b.iso)).slice(0,3);
+  const upcomingHtml = upcoming.length ? upcoming.map(u => `
+    <div class="sess" data-session-id="${u.id}" style="cursor:pointer;">
+      <span class="name">${u.dayLabel.split(',')[0]} — ${u.name}</span><span class="dur">${u.dur}</span>
+    </div>`).join("") : `<div class="empty-note">Nothing loaded past this week — ask me to plan ahead when you're ready.</div>`;
+
+  el.innerHTML = `
+    <div class="today-eyebrow">Today · ${dayLabel}</div>
+    ${sessions.length===1 ? `<div class="today-hero-name">${sessions[0].name}</div><div class="today-hero-meta">${sessions[0].dur}</div>` : ''}
+    ${sessions.length>1 ? `<div class="today-hero-name">${sessions.length} sessions today</div>` : ''}
+    <div class="today-sessions">${sessions.length>1 ? sessionsHtml : ''}</div>
+    ${emptyHtml}
+    <div class="card" style="margin-top:8px;">
+      <h2>Form right now</h2>
+      <div class="stat-row">
+        <div class="stat"><div class="k">Fitness (CTL)</div><div class="v">${latest.ctl.toFixed(1)}</div></div>
+        <div class="stat"><div class="k">Fatigue (ATL)</div><div class="v">${latest.atl.toFixed(1)}</div></div>
+        <div class="stat ${latest.tsb<0?'tsb-neg':'tsb-pos'}"><div class="k">Form (TSB)</div><div class="v">${latest.tsb.toFixed(1)}</div></div>
+      </div>
+    </div>
+    <div class="card"><h2>Coming up</h2>${upcomingHtml}</div>
+  `;
+  attachToggleHandlers(el);
+  el.querySelectorAll('[data-edit-id]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); openTab('week'); setTimeout(()=>{
+      const wkBtn = weekList.querySelector(`[data-edit-id="${btn.dataset.editId}"]`); if(wkBtn) wkBtn.click();
+    },0); });
+  });
+  el.querySelectorAll('.sess[data-session-id]').forEach(node=>{
+    node.addEventListener('click', (e)=>{ if(e.target.closest('[data-toggle-id],[data-edit-id],[data-del-id]')) return; openSessionDetail(node.dataset.sessionId); });
+  });
+}
+
+const weekList = document.getElementById("weekList");
+
+function renderWeek(){
+  weekList.innerHTML = weekState.map(day => `
+    <div class="day-row ${day.iso===todayIso ? 'today' : ''}">
+      <div class="day-col"><div class="dow">${day.dow}</div><div class="dom display">${day.dom}</div></div>
+      <div class="day-sessions" data-day-iso="${day.iso}">
+        ${day.sessions.map(sessRowHtml).join("")}
+        <button class="add-btn" data-add-day="${day.iso}">+ Add workout</button>
+      </div>
+    </div>
+  `).join("");
+  attachToggleHandlers(weekList);
+  attachSessionInteractions();
+}
+
+function attachSessionInteractions(){
+  // open detail on click (ignoring icon buttons / toggle)
+  weekList.querySelectorAll('.sess[data-session-id]').forEach(el=>{
+    el.addEventListener('click', (e)=>{ if(e.target.closest('[data-toggle-id],[data-edit-id],[data-del-id]')) return; openSessionDetail(el.dataset.sessionId); });
+  });
+  // edit
+  weekList.querySelectorAll('[data-edit-id]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const id = btn.dataset.editId;
+      const rowEl = weekList.querySelector(`.sess[data-session-id="${id}"]`);
+      const dayIso = rowEl.closest('.day-sessions').dataset.dayIso;
+      const s = weekSessionsById[id];
+      rowEl.outerHTML = inlineFormHtml(dayIso, s);
+      attachFormHandlers();
+    });
+  });
+  // add
+  weekList.querySelectorAll('[data-add-day]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const dayIso = btn.dataset.addDay;
+      btn.insertAdjacentHTML('beforebegin', inlineFormHtml(dayIso, null));
+      attachFormHandlers();
+    });
+  });
+  // drag and drop
+  weekList.querySelectorAll('.sess[draggable="true"]').forEach(el=>{
+    el.addEventListener('dragstart', (e)=>{
+      e.dataTransfer.setData('text/plain', el.dataset.sessionId);
+      el.classList.add('dragging');
+    });
+    el.addEventListener('dragend', ()=> el.classList.remove('dragging'));
+  });
+  weekList.querySelectorAll('.day-sessions').forEach(container=>{
+    container.addEventListener('dragover', (e)=>{ e.preventDefault(); container.classList.add('drag-over'); });
+    container.addEventListener('dragleave', ()=> container.classList.remove('drag-over'));
+    container.addEventListener('drop', async (e)=>{
+      e.preventDefault();
+      container.classList.remove('drag-over');
+      const id = e.dataTransfer.getData('text/plain');
+      const targetIso = container.dataset.dayIso;
+      const fromDay = weekState.find(d => d.sessions.some(s=>s.id===id));
+      const toDay = weekState.find(d => d.iso === targetIso);
+      if(!fromDay || !toDay || fromDay===toDay) return;
+      const idx = fromDay.sessions.findIndex(s=>s.id===id);
+      const [moved] = fromDay.sessions.splice(idx,1);
+      toDay.sessions.push(moved);
+      await saveWeekState();
+      renderWeek(); renderToday();
+    });
+  });
+}
+
+function attachFormHandlers(){
+  weekList.querySelectorAll('.inline-form').forEach(form=>{
+    if(form.dataset.bound) return;
+    form.dataset.bound = '1';
+    form.querySelector('.cancel').addEventListener('click', ()=>{ renderWeek(); });
+    const delBtn = form.querySelector('[data-form-delete]');
+    if(delBtn){
+      delBtn.addEventListener('click', async ()=>{
+        if(!confirm('Remove this workout?')) return;
+        const id = delBtn.dataset.formDelete;
+        const day = weekState.find(d => d.sessions.some(s=>s.id===id));
+        if(day) day.sessions = day.sessions.filter(s=>s.id!==id);
+        delete doneMap[id];
+        await saveDoneMap();
+        await saveWeekState();
+        renderWeek(); renderToday();
+      });
+    }
+    form.querySelector('.save').addEventListener('click', async ()=>{
+      const dayIso = form.dataset.formForDay;
+      const editingId = form.dataset.editingId;
+      const name = form.querySelector('.f-name').value.trim();
+      const dur = form.querySelector('.f-dur').value.trim() || '—';
+      const desc = form.querySelector('.f-desc').value.trim();
+      if(!name){ form.querySelector('.f-name').focus(); return; }
+      const day = weekState.find(d => d.iso === dayIso);
+      if(editingId){
+        const s = day.sessions.find(s=>s.id===editingId);
+        s.name = name; s.dur = dur; s.desc = desc;
+      } else {
+        const id = 'sess-' + Date.now() + '-' + Math.floor(Math.random()*1000);
+        day.sessions.push({id, name, dur, desc});
+      }
+      await saveWeekState();
+      renderWeek(); renderToday();
+    });
+  });
+}
+
+function openTab(tabName){
+  document.querySelectorAll('nav.sidenav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('section.view').forEach(v=>v.classList.remove('active'));
+  const navBtn = document.querySelector(`nav.sidenav button[data-tab="${tabName}"]`);
+  if(navBtn) navBtn.classList.add('active');
+  document.getElementById('view-'+tabName).classList.add('active');
+}
+
+function openSessionDetail(id){
+  const s = weekSessionsById[id];
+  if(!s) return;
+  document.getElementById('detailName').textContent = s.name;
+  document.getElementById('detailMeta').innerHTML = `${s.dayLabel} · ${s.dur} ${s.locked ? '<span class="status-pill done">Done</span>' : (isDone(id) ? '<span class="status-pill done">Done</span>' : '<span class="status-pill planned">Planned</span>')}`;
+  document.getElementById('detailBody').textContent = s.desc;
+  const actionsEl = document.getElementById('detailActions');
+  if(s.locked){ actionsEl.innerHTML = ''; }
+  else {
+    actionsEl.innerHTML = `<button id="detailEdit">Edit</button><button class="danger" id="detailDelete">Remove</button>`;
+    document.getElementById('detailEdit').onclick = ()=>{ openTab('week'); setTimeout(()=>{
+      const btn = weekList.querySelector(`[data-edit-id="${id}"]`); if(btn) btn.click();
+    },0); };
+    document.getElementById('detailDelete').onclick = async ()=>{
+      if(!confirm('Remove this workout?')) return;
+      const day = weekState.find(d => d.sessions.some(x=>x.id===id));
+      if(day) day.sessions = day.sessions.filter(x=>x.id!==id);
+      delete doneMap[id];
+      await saveDoneMap();
+      await saveWeekState();
+      renderWeek(); renderToday();
+      openTab('week');
+    };
+  }
+  openTab('detail');
+}
+document.getElementById('detailBack').addEventListener('click', ()=> openTab('week'));
+
+function renderChart(){
+  const w = 860, h = 260, padL = 34, padR = 10, padT = 14, padB = 24;
+  const ctlVals = wellness.map(d=>d.ctl), atlVals = wellness.map(d=>d.atl), tsbVals = wellness.map(d=>d.tsb);
+  const allVals = ctlVals.concat(atlVals).concat(tsbVals);
+  const min = Math.min(...allVals) - 5, max = Math.max(...allVals) + 5;
+  const n = wellness.length;
+  const x = i => padL + (i/(n-1)) * (w-padL-padR);
+  const y = v => padT + (1 - (v-min)/(max-min)) * (h-padT-padB);
+  function path(key){ return wellness.map((d,i)=> `${i===0?'M':'L'} ${x(i).toFixed(1)} ${y(d[key]).toFixed(1)}`).join(' '); }
+  const zeroY = y(0);
+  const svg = `
+  <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <line x1="${padL}" y1="${zeroY}" x2="${w-padR}" y2="${zeroY}" stroke="rgba(238,241,236,0.15)" stroke-dasharray="2,3"/>
+    <path d="${path('ctl')}" fill="none" stroke="#4C86D6" stroke-width="2.2"/>
+    <path d="${path('atl')}" fill="none" stroke="#C1652E" stroke-width="2.2"/>
+    <path d="${path('tsb')}" fill="none" stroke="#F2C14E" stroke-width="1.6" stroke-dasharray="4,3"/>
+    <text x="${padL}" y="${h-6}" fill="rgba(238,241,236,0.4)" font-size="11" font-family="Inter">Aug 6</text>
+    <text x="${w-padR-40}" y="${h-6}" fill="rgba(238,241,236,0.4)" font-size="11" font-family="Inter">Sep 6</text>
+  </svg>`;
+  document.getElementById("chartHolder").innerHTML = svg;
+}
+function renderRecent(){
+  document.getElementById("recentBody").innerHTML = recentDone.slice(0,10).map(r => `
+    <tr><td>${r.d.slice(5)}</td><td class="name">${r.sport} — ${r.detail}</td><td>${r.min}m</td><td>${r.load}</td></tr>
+  `).join("");
+}
+
+document.querySelectorAll('nav.sidenav button').forEach(btn=>{
+  btn.addEventListener('click', ()=> openTab(btn.dataset.tab));
+});
+
+async function loadLogs(){
+  const raw = await storeGet('workout-logs');
+  try{ return raw ? JSON.parse(raw) : []; }catch(e){ return []; }
+}
+async function saveLogs(logs){ await storeSet('workout-logs', JSON.stringify(logs)); }
+async function renderLogs(){
+  const logs = await loadLogs();
+  const el = document.getElementById('loggedList');
+  if(!logs.length){ el.innerHTML = '<div class="empty-note">Nothing logged here yet.</div>'; return; }
+  el.innerHTML = logs.slice().reverse().map(l => `
+    <div class="logged-item">
+      <div>
+        <div>${l.sport} ${l.notes ? '— ' + l.notes.slice(0,60) : ''}</div>
+        <div class="l-meta">${l.date} · ${l.duration||'—'} min ${l.distance?('· '+l.distance+'m'):''} ${l.hr?('· HR '+l.hr):''} · ${l.effort}</div>
+      </div>
+    </div>`).join("");
+}
+document.getElementById('lf-date').valueAsDate = now;
+document.getElementById('logForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const entry = {
+    date: document.getElementById('lf-date').value,
+    sport: document.getElementById('lf-sport').value,
+    duration: document.getElementById('lf-duration').value,
+    distance: document.getElementById('lf-distance').value,
+    hr: document.getElementById('lf-hr').value,
+    effort: document.getElementById('lf-effort').value,
+    notes: document.getElementById('lf-notes').value,
+  };
+  const logs = await loadLogs();
+  logs.push(entry);
+  await saveLogs(logs);
+  e.target.reset();
+  document.getElementById('lf-date').valueAsDate = now;
+  renderLogs();
+});
+
+async function syncFromIntervals(){
+  const statusEl = document.getElementById('syncStatus');
+  if(statusEl) statusEl.textContent = 'Syncing…';
+  try{
+    const [wRes, aRes] = await Promise.all([
+      fetch('/api/intervals?type=wellness'),
+      fetch('/api/intervals?type=activities')
+    ]);
+    if(!wRes.ok || !aRes.ok) throw new Error('API error');
+    const wJson = await wRes.json();
+    const aJson = await aRes.json();
+
+    const newWellness = wJson
+      .filter(r => r.ctl != null && r.atl != null)
+      .map(r => ({ d: r.id, ctl: r.ctl, atl: r.atl, tsb: +(r.ctl - r.atl).toFixed(1) }))
+      .sort((a,b)=> a.d.localeCompare(b.d));
+    if(newWellness.length) wellness = newWellness.slice(-32);
+
+    const newDone = aJson
+      .map(a => ({
+        d: (a.start_date_local||'').slice(0,10),
+        sport: a.type || 'Other',
+        detail: a.name || a.type || '',
+        min: a.moving_time ? +(a.moving_time/60).toFixed(1) : 0,
+        load: a.icu_training_load != null ? Math.round(a.icu_training_load) : 0
+      }))
+      .sort((a,b)=> b.d.localeCompare(a.d));
+    if(newDone.length) recentDone = newDone.slice(0,10);
+
+    await storeSet('intervals-cache', JSON.stringify({wellness, recentDone, syncedAt: new Date().toISOString()}));
+
+    renderSideStat();
+    renderToday();
+    renderChart();
+    renderRecent();
+    if(statusEl) statusEl.textContent = 'Synced ' + new Date().toLocaleTimeString();
+  }catch(e){
+    if(statusEl) statusEl.textContent = 'Sync failed — check API deploy/env vars';
+    console.warn('Sync failed', e);
+  }
+}
+
+async function loadCachedIntervals(){
+  const raw = await storeGet('intervals-cache');
+  if(!raw) return;
+  try{
+    const c = JSON.parse(raw);
+    if(c.wellness && c.wellness.length) wellness = c.wellness;
+    if(c.recentDone && c.recentDone.length) recentDone = c.recentDone;
+  }catch(e){}
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+}
+
+(async function init(){
+  await loadCachedIntervals();
+  await loadDoneMap();
+  await loadWeekState();
+  rebuildIndexes();
+  renderSideStat();
+  renderToday();
+  renderWeek();
+  renderChart();
+  renderLogs();
+  renderRecent();
+  syncFromIntervals(); // best-effort background refresh; silently no-ops until API/DB are configured
+})();
+</script>
+</body>
+</html>

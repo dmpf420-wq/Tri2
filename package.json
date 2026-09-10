@@ -1,0 +1,6 @@
+{
+  "name": "tri-log",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Diego's triathlon training dashboard — synced via Supabase, pulling from intervals.icu"
+}
