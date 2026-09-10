@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     url = `https://intervals.icu/api/v1/athlete/${athleteId}/wellness.json?oldest=${oldest}&newest=${newest}`;
   } else if (type === 'activities') {
     const oldest = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    url = `https://intervals.icu/api/v1/athlete/${athleteId}/activities.json?oldest=${oldest}`;
+    url = `https://intervals.icu/api/v1/athlete/${athleteId}/activities?oldest=${oldest}`;
   } else {
     return res.status(400).json({ error: 'Unknown type. Use wellness or activities.' });
   }
