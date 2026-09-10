@@ -678,7 +678,7 @@ function renderToday(){
 
   el.innerHTML = `
     <div class="today-eyebrow">Today · ${dayLabel}</div>
-    ${sessions.length===1 ? `<div class="today-hero-name">${sessions[0].name}</div><div class="today-hero-meta">${sessions[0].dur}</div>` : ''}
+    ${sessions.length===1 ? `<div class="today-hero-name" data-session-id="${sessions[0].id}" style="cursor:pointer;">${sessions[0].name}</div><div class="today-hero-meta" data-session-id="${sessions[0].id}" style="cursor:pointer;">${sessions[0].dur} · tap for details</div>` : ''}
     ${sessions.length>1 ? `<div class="today-hero-name">${sessions.length} sessions today</div>` : ''}
     <div class="today-sessions">${sessions.length>1 ? sessionsHtml : ''}</div>
     ${emptyHtml}
@@ -712,6 +712,9 @@ function renderToday(){
   });
   el.querySelectorAll('.sess[data-session-id]').forEach(node=>{
     node.addEventListener('click', (e)=>{ if(e.target.closest('[data-toggle-id],[data-edit-id],[data-del-id]')) return; openSessionDetail(node.dataset.sessionId); });
+  });
+  el.querySelectorAll('.today-hero-name[data-session-id], .today-hero-meta[data-session-id]').forEach(node=>{
+    node.addEventListener('click', ()=> openSessionDetail(node.dataset.sessionId));
   });
 }
 
