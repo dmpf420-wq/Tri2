@@ -251,14 +251,16 @@
   .ztable td.zrange{color:var(--paper-dim); font-family:'Barlow Condensed',sans-serif; font-size:16px;}
   .zbar{width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:8px;}
 
-  .vol-row{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px 0; border-bottom:1px solid var(--line);}
-  .vol-row:last-child{border-bottom:none;}
-  .vol-label .name{font-family:'Barlow Condensed',sans-serif; font-size:22px; font-weight:600;}
-  .vol-label .range{color:var(--paper-dim); font-size:13px; margin-top:2px;}
-  .vol-nums{display:flex; gap:28px; flex-shrink:0;}
-  .vol-num{text-align:right;}
-  .vol-num .v{font-family:'Barlow Condensed',sans-serif; font-size:30px; font-weight:600;}
-  .vol-num .k{font-size:11.5px; color:var(--paper-faint); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px;}
+  .vol-bubbles{display:flex; flex-direction:column; gap:18px;}
+  .vol-bubble .bubble-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px;}
+  .vol-bubble .bubble-name{font-family:'Barlow Condensed',sans-serif; font-size:26px; font-weight:600;}
+  .vol-bubble .bubble-range{color:var(--paper-dim); font-size:13px;}
+  .sport-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+  .sport-stat{background:var(--surface-3); border-radius:var(--radius); padding:16px 18px; text-align:center;}
+  .sport-stat .k{font-size:12px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;}
+  .sport-stat .v{font-family:'Barlow Condensed',sans-serif; font-size:30px; font-weight:600;}
+  .sport-stat .v span{font-size:13px; color:var(--paper-dim); font-family:'Inter',sans-serif; font-weight:400; margin-left:3px;}
+  .sport-stat .dist{font-size:13.5px; color:var(--paper-dim); margin-top:4px;}
 
   .note-box{background:rgba(76,134,214,0.07); border:1px solid rgba(76,134,214,0.25); border-radius:var(--radius); padding:16px 18px; font-size:13.5px; color:var(--paper-dim); line-height:1.55;}
 
@@ -276,8 +278,7 @@
     .stat-row{grid-template-columns:1fr 1fr;}
     .zone-grid{grid-template-columns:1fr;}
     form.logform{grid-template-columns:1fr;}
-    .vol-row{flex-direction:column; align-items:flex-start; gap:10px;}
-    .vol-nums{width:100%; justify-content:space-between;}
+    .sport-grid{grid-template-columns:1fr;}
   }
 </style>
 </head>
@@ -320,32 +321,34 @@
     </section>
 
     <section class="view" id="view-volume">
-      <div class="card">
-        <h2 class="plain">Miles &amp; hours</h2>
-        <div class="vol-row">
-          <div class="vol-label"><div class="name">Weekly</div><div class="range">Trailing 7 days · Sep 1–7</div></div>
-          <div class="vol-nums">
-            <div class="vol-num"><div class="v">10.6</div><div class="k">Hours</div></div>
-            <div class="vol-num"><div class="v">84.6</div><div class="k">Miles</div></div>
+      <div class="vol-bubbles">
+        <div class="card vol-bubble">
+          <div class="bubble-head"><div class="bubble-name">Weekly</div><div class="bubble-range">Trailing 7 days · Sep 1–7</div></div>
+          <div class="sport-grid">
+            <div class="sport-stat"><div class="k">Swim</div><div class="v">1.1<span>hrs</span></div><div class="dist">2,950 m</div></div>
+            <div class="sport-stat"><div class="k">Bike</div><div class="v">4.4<span>hrs</span></div><div class="dist">67.8 mi</div></div>
+            <div class="sport-stat"><div class="k">Run</div><div class="v">1.7<span>hrs</span></div><div class="dist">10.5 mi</div></div>
           </div>
         </div>
-        <div class="vol-row">
-          <div class="vol-label"><div class="name">Monthly</div><div class="range">September, to date</div></div>
-          <div class="vol-nums">
-            <div class="vol-num"><div class="v">9.5</div><div class="k">Hours</div></div>
-            <div class="vol-num"><div class="v">80.1</div><div class="k">Miles</div></div>
+        <div class="card vol-bubble">
+          <div class="bubble-head"><div class="bubble-name">Monthly</div><div class="bubble-range">September, to date</div></div>
+          <div class="sport-grid">
+            <div class="sport-stat"><div class="k">Swim</div><div class="v">1.1<span>hrs</span></div><div class="dist">2,950 m</div></div>
+            <div class="sport-stat"><div class="k">Bike</div><div class="v">4.4<span>hrs</span></div><div class="dist">67.8 mi</div></div>
+            <div class="sport-stat"><div class="k">Run</div><div class="v">1.7<span>hrs</span></div><div class="dist">10.5 mi</div></div>
           </div>
         </div>
-        <div class="vol-row">
-          <div class="vol-label"><div class="name">Yearly</div><div class="range">Since tracking began, Jun 27</div></div>
-          <div class="vol-nums">
-            <div class="vol-num"><div class="v">47.5</div><div class="k">Hours</div></div>
-            <div class="vol-num"><div class="v">419.6</div><div class="k">Miles</div></div>
+        <div class="card vol-bubble">
+          <div class="bubble-head"><div class="bubble-name">Yearly</div><div class="bubble-range">Since tracking began, Jun 27</div></div>
+          <div class="sport-grid">
+            <div class="sport-stat"><div class="k">Swim</div><div class="v">5.1<span>hrs</span></div><div class="dist">12,400 m</div></div>
+            <div class="sport-stat"><div class="k">Bike</div><div class="v">23.0<span>hrs</span></div><div class="dist">365.1 mi</div></div>
+            <div class="sport-stat"><div class="k">Run</div><div class="v">7.6<span>hrs</span></div><div class="dist">46.9 mi</div></div>
           </div>
         </div>
       </div>
       <div class="note-box">
-        Pulled from your Notion Workout Log (swim + bike + run distance combined). "Yearly" reads "since tracking began" rather than Jan 1, since that's as far back as your logged data goes. Ask me to refresh this any time you want current numbers.
+        Broken out by sport from your intervals.icu activity history. Swim distance stays in meters (that's how swimmers actually think about it); bike and run are in miles. "Yearly" reads "since tracking began" rather than Jan 1, since that's as far back as the data goes. Ask me to refresh this any time you want current numbers.
       </div>
     </section>
 
