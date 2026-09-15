@@ -315,7 +315,10 @@
 
     <section class="view" id="view-week">
       <div class="card">
-        <h2 class="plain">Sep 7 – Sep 13</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
+          <h2 class="plain" id="weekRangeLabel" style="margin:0;">This Week</h2>
+          <button id="suggestWeekBtn" style="background:none; border:1px solid var(--line-2); color:var(--paper-dim); font-size:13px; padding:8px 14px; border-radius:7px; cursor:pointer;">🔮 Suggest next week</button>
+        </div>
         <div id="weekList"></div>
       </div>
     </section>
@@ -571,6 +574,111 @@ function rebuildIndexes(){
   }));
 }
 
+// ---------- Weekly suggestion engine ----------
+// Phase 1 (Base) template: day-of-week -> session blueprints.
+// [HARD] flagged sessions get downgraded to easy Z2 versions when the
+// formula below says this isn't a week to add stress.
+const PHASE1_TEMPLATE = [
+  { dow:'Mon', sessions:[
+    { name:'Run (Z2 easy, optional)', baseMin:25, hard:false, desc:'Skippable gap-filler. Do it when it feels right, not out of guilt.' },
+    { name:'Swim (technique)', baseMin:40, hard:false, desc:'CSS pace work. Drills: 6x25m fingertip drag. Main: 8x50m @ CSS pace w/ 20s rest.' }
+  ]},
+  { dow:'Tue', sessions:[
+    { name:'Run (hard) — negative split tempo', baseMin:60, hard:true,
+      easyName:'Run (Z2 easy)', easyDesc:'Easy aerobic run — kept easy this week rather than a tempo session.',
+      desc:'10min easy warmup, then 3 segments each faster than the last, pushing toward LTHR ~177 by the end. 5-10min easy cooldown.' }
+  ]},
+  { dow:'Wed', sessions:[
+    { name:'Bike (quality/FTP) — threshold', baseMin:65, hard:true,
+      easyName:'Bike (Z2 easy)', easyDesc:'Easy Z2 spin — kept easy this week rather than a threshold session.',
+      desc:'e.g. 4x8min at FTP with 3min easy recovery between, or steady 25-30min at threshold.' }
+  ]},
+  { dow:'Thu', sessions:[
+    { name:'Swim (technique, easy)', baseMin:45, hard:false, desc:'CSS pace work. Drills: 6x25m fingertip drag. Main: 8x50m @ CSS pace w/ 20s rest.' },
+    { name:'Push (strength)', baseMin:null, hard:false, desc:'Weighted dips, close grip bench, lateral raise, cable pushdown.' }
+  ]},
+  { dow:'Fri', sessions:[
+    { name:'Swim (technique, evening)', baseMin:45, hard:false, desc:'CSS pace work plus stroke-count/cadence drills and kickboard.' },
+    { name:'Run (Z2 easy)', baseMin:45, hard:false, desc:'Easy aerobic run, keep it conversational.' },
+    { name:'Pull (strength)', baseMin:null, hard:false, desc:'Pulldowns, barbell rows, cable rows, curls.' }
+  ]},
+  { dow:'Sat', sessions:[
+    { name:'Long bike', baseMin:140, hard:false, desc:'Long ride, mostly Z2. Practice fueling — 75-90g carbs split into 2 doses.' }
+  ]},
+  { dow:'Sun', sessions:[
+    { name:'Bike (easy, recovery)', baseMin:30, hard:false, desc:'Easy active-recovery spin. Z1-Z2, low effort, no structure needed.' }
+  ]}
+];
+
+function computeSuggestionLevel(){
+  const w = wellness;
+  const latestW = w[w.length-1];
+  const weekAgo = w.length > 7 ? w[w.length-8] : w[0];
+  const rampRate = latestW.ctl - weekAgo.ctl; // CTL change over ~7 days
+  const tsb = latestW.tsb;
+
+  if(tsb < -30){
+    return { level:'cutback', multiplier:0.55, hardDays:0,
+      label:'Cutback week', reason:`Form is deeply negative (TSB ${tsb.toFixed(1)}) — carrying a lot of unrecovered fatigue. Cutting volume and dropping the hard sessions this week.` };
+  }
+  if(tsb >= -30 && tsb < -15 && rampRate > 8){
+    return { level:'hold', multiplier:1.0, hardDays:0,
+      label:'Hold, no new stress', reason:`Fitness has ramped fast (+${rampRate.toFixed(1)} CTL this week) and form is still negative (TSB ${tsb.toFixed(1)}). Holding volume flat and skipping new hard sessions.` };
+  }
+  if(tsb >= -30 && tsb < -15){
+    return { level:'maintain', multiplier:1.0, hardDays:2,
+      label:'Maintain', reason:`Form is negative but ramp rate looks normal (TSB ${tsb.toFixed(1)}, +${rampRate.toFixed(1)} CTL/wk) — proceeding as scheduled.` };
+  }
+  if(tsb >= -15 && tsb < -5){
+    return { level:'build', multiplier:1.05, hardDays:2,
+      label:'Normal progression', reason:`Form is in a normal training range (TSB ${tsb.toFixed(1)}) — small volume increase okay.` };
+  }
+  if(tsb >= -5 && tsb <= 5){
+    return { level:'key', multiplier:1.05, hardDays:2,
+      label:'Good window for a key session', reason:`You're fairly fresh (TSB ${tsb.toFixed(1)}) — good week for the hard sessions to really count.` };
+  }
+  return { level:'push', multiplier:1.15, hardDays:2,
+    label:'Fresh — safe to push', reason:`Form is well positive and sustained (TSB ${tsb.toFixed(1)}) — safe to add some volume or intensity this week.` };
+}
+
+function nextMondayAfter(lastIso){
+  const d = new Date(lastIso + 'T12:00:00');
+  d.setDate(d.getDate() + 1); // day after the current week's last day
+  // roll forward to Monday if it isn't already
+  while(d.getDay() !== 1) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function scaleMin(baseMin, multiplier){
+  if(baseMin == null) return '—';
+  const scaled = Math.round((baseMin * multiplier) / 5) * 5;
+  return Math.max(10, scaled) + ' min';
+}
+
+function buildSuggestedWeek(sugg){
+  const lastIso = weekState.length ? weekState[weekState.length-1].iso : todayIso;
+  const startDate = nextMondayAfter(lastIso);
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  return PHASE1_TEMPLATE.map((template, i) => {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + i);
+    const iso = isoLocal(date);
+    const dom = String(date.getDate());
+    const dateLabel = `${template.dow}, ${date.toLocaleDateString('en-US',{month:'short', day:'numeric'})}`;
+
+    const sessions = template.sessions.map((s, j) => {
+      const useEasy = s.hard && sugg.hardDays === 0;
+      const name = useEasy ? s.easyName : s.name;
+      const desc = useEasy ? s.easyDesc : s.desc;
+      const dur = scaleMin(s.baseMin, useEasy ? 1.0 : sugg.multiplier);
+      return { id: `sug-${iso}-${j}`, name, dur, desc };
+    });
+
+    return { dow: template.dow, dom, iso, date: dateLabel, sessions };
+  });
+}
+
 async function loadWeekState(){
   const raw = await storeGet('week-plan-v1');
   if(raw){
@@ -721,6 +829,11 @@ function renderToday(){
 const weekList = document.getElementById("weekList");
 
 function renderWeek(){
+  const rangeEl = document.getElementById('weekRangeLabel');
+  if(rangeEl && weekState.length){
+    const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    rangeEl.textContent = `${fmt(weekState[0].iso)} – ${fmt(weekState[weekState.length-1].iso)}`;
+  }
   weekList.innerHTML = weekState.map(day => `
     <div class="day-row ${day.iso===todayIso ? 'today' : ''}">
       <div class="day-col"><div class="dow">${day.dow}</div><div class="dom display">${day.dom}</div></div>
@@ -954,6 +1067,22 @@ async function loadCachedIntervals(){
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('/sw.js').catch(()=>{}));
 }
+
+document.getElementById('suggestWeekBtn').addEventListener('click', async ()=>{
+  const sugg = computeSuggestionLevel();
+  const ok = confirm(
+    `${sugg.label}\n\n${sugg.reason}\n\nThis will replace next week's plan with a fresh draft based on this — you can still edit, add, remove, or drag anything afterward. Continue?`
+  );
+  if(!ok) return;
+  const newWeek = buildSuggestedWeek(sugg);
+  // clear old done-toggles for the days being replaced so stale checkmarks don't carry over
+  weekState.forEach(day => day.sessions.forEach(s => delete doneMap[s.id]));
+  await saveDoneMap();
+  weekState = newWeek;
+  await saveWeekState();
+  renderWeek();
+  renderToday();
+});
 
 (async function init(){
   await loadCachedIntervals();
