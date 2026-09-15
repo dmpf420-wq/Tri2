@@ -151,6 +151,8 @@
     font-size:14px; padding:2px 5px; border-radius:5px; flex-shrink:0; line-height:1;
   }
   .icon-btn:hover{color:var(--paper); background:var(--surface-2);}
+  .icon-btn:disabled{opacity:0.3; cursor:not-allowed;}
+  .icon-btn:disabled:hover{background:none; color:var(--paper-faint);}
 
   .add-btn{
     background:none; border:1px dashed var(--line-2); color:var(--paper-dim);
@@ -316,8 +318,16 @@
     <section class="view" id="view-week">
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
-          <h2 class="plain" id="weekRangeLabel" style="margin:0;">This Week</h2>
-          <button id="suggestWeekBtn" style="background:none; border:1px solid var(--line-2); color:var(--paper-dim); font-size:13px; padding:8px 14px; border-radius:7px; cursor:pointer;">🔮 Suggest next week</button>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button id="weekPrevBtn" class="icon-btn" style="font-size:16px; border:1px solid var(--line-2); border-radius:6px; padding:4px 10px;">&larr;</button>
+            <h2 class="plain" id="weekRangeLabel" style="margin:0;">This Week</h2>
+            <button id="weekNextBtn" class="icon-btn" style="font-size:16px; border:1px solid var(--line-2); border-radius:6px; padding:4px 10px;">&rarr;</button>
+            <button id="weekTodayBtn" style="display:none; background:none; border:1px solid var(--line-2); color:var(--paper-dim); font-size:12px; padding:5px 10px; border-radius:100px; cursor:pointer;">Today</button>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="deleteWeekBtn" class="icon-btn" style="border:1px solid var(--line-2); border-radius:7px; padding:8px 12px; font-size:13px;" title="Delete this week">Delete week</button>
+            <button id="suggestWeekBtn" style="background:none; border:1px solid var(--line-2); color:var(--paper-dim); font-size:13px; padding:8px 14px; border-radius:7px; cursor:pointer;">🔮 Suggest next week</button>
+          </div>
         </div>
         <div id="weekList"></div>
       </div>
@@ -558,16 +568,33 @@ const seedWeek = [
   ]},
 ];
 
-let weekState = [];
+let allWeeks = {};      // key: Monday ISO date of that week -> array of 7 day objects
+let weekOrder = [];     // sorted Monday-ISO keys, ascending
+let viewIndex = 0;      // which week (index into weekOrder) is currently shown in the Week tab
 const weekSessionsById = {};
 const flatUpcoming = [];
+const daysByIsoAll = {}; // every day, from every stored week, keyed by its iso date
+
+function currentWeek(){ return allWeeks[weekOrder[viewIndex]] || []; }
+
+function findDayContainingSession(id){
+  for(const key of weekOrder){
+    const day = allWeeks[key].find(d => d.sessions.some(s=>s.id===id));
+    if(day) return day;
+  }
+  return null;
+}
 
 function rebuildIndexes(){
   for(const k in weekSessionsById) delete weekSessionsById[k];
+  for(const k in daysByIsoAll) delete daysByIsoAll[k];
   flatUpcoming.length = 0;
-  weekState.forEach(day => day.sessions.forEach(s => {
-    weekSessionsById[s.id] = {...s, dayLabel:day.date, iso:day.iso};
-    flatUpcoming.push({...s, iso:day.iso, dayLabel:day.date});
+  weekOrder.forEach(key => allWeeks[key].forEach(day => {
+    daysByIsoAll[day.iso] = day;
+    day.sessions.forEach(s => {
+      weekSessionsById[s.id] = {...s, dayLabel:day.date, iso:day.iso};
+      flatUpcoming.push({...s, iso:day.iso, dayLabel:day.date});
+    });
   }));
   Object.keys(historicalDays).forEach(iso => historicalDays[iso].sessions.forEach(s => {
     weekSessionsById[s.id] = {...s, dayLabel:historicalDays[iso].label, iso};
@@ -656,7 +683,9 @@ function scaleMin(baseMin, multiplier){
 }
 
 function buildSuggestedWeek(sugg){
-  const lastIso = weekState.length ? weekState[weekState.length-1].iso : todayIso;
+  const latestKey = weekOrder[weekOrder.length-1];
+  const latestWeekArr = latestKey ? allWeeks[latestKey] : null;
+  const lastIso = latestWeekArr && latestWeekArr.length ? latestWeekArr[latestWeekArr.length-1].iso : todayIso;
   const startDate = nextMondayAfter(lastIso);
   const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
@@ -679,16 +708,49 @@ function buildSuggestedWeek(sugg){
   });
 }
 
-async function loadWeekState(){
-  const raw = await storeGet('week-plan-v1');
+async function loadAllWeeks(){
+  const raw = await storeGet('weeks-v1');
   if(raw){
-    try{ weekState = JSON.parse(raw); return; }catch(e){}
+    try{
+      allWeeks = JSON.parse(raw);
+      weekOrder = Object.keys(allWeeks).sort();
+      pickInitialView();
+      return;
+    }catch(e){}
   }
-  weekState = JSON.parse(JSON.stringify(seedWeek));
-  await storeSet('week-plan-v1', JSON.stringify(weekState));
+  // Migrate from the old single-week storage format if present
+  const legacyRaw = await storeGet('week-plan-v1');
+  if(legacyRaw){
+    try{
+      const legacyWeek = JSON.parse(legacyRaw);
+      if(legacyWeek.length){
+        allWeeks = { [legacyWeek[0].iso]: legacyWeek };
+        weekOrder = Object.keys(allWeeks).sort();
+        pickInitialView();
+        await storeSet('weeks-v1', JSON.stringify(allWeeks));
+        return;
+      }
+    }catch(e){}
+  }
+  // First run ever — seed from the built-in starter week
+  const seeded = JSON.parse(JSON.stringify(seedWeek));
+  allWeeks = { [seeded[0].iso]: seeded };
+  weekOrder = Object.keys(allWeeks).sort();
+  pickInitialView();
+  await storeSet('weeks-v1', JSON.stringify(allWeeks));
 }
-async function saveWeekState(){
-  await storeSet('week-plan-v1', JSON.stringify(weekState));
+
+function pickInitialView(){
+  // Default to whichever stored week contains today; otherwise the most recent one.
+  let idx = weekOrder.findIndex(key => {
+    const arr = allWeeks[key];
+    return arr.length && todayIso >= arr[0].iso && todayIso <= arr[arr.length-1].iso;
+  });
+  viewIndex = idx !== -1 ? idx : Math.max(0, weekOrder.length - 1);
+}
+
+async function saveAllWeeks(){
+  await storeSet('weeks-v1', JSON.stringify(allWeeks));
   rebuildIndexes();
 }
 
@@ -773,7 +835,7 @@ function renderToday(){
   const dayLabel = now.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
   let sessions = [];
   if(historicalDays[todayIso]){ sessions = historicalDays[todayIso].sessions; }
-  else { const wk = weekState.find(d => d.iso === todayIso); if(wk) sessions = wk.sessions; }
+  else { const wk = daysByIsoAll[todayIso]; if(wk) sessions = wk.sessions; }
 
   const sessionsHtml = sessions.map(sessRowHtml).join("");
   const emptyHtml = !sessions.length ? `<div class="today-empty">No plan loaded for today yet — this dashboard currently covers Sep 6–13. Ask me to plan the next week and I'll refresh this.</div>` : "";
@@ -814,9 +876,16 @@ function renderToday(){
   `;
   attachToggleHandlers(el);
   el.querySelectorAll('[data-edit-id]').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{ e.stopPropagation(); openTab('week'); setTimeout(()=>{
-      const wkBtn = weekList.querySelector(`[data-edit-id="${btn.dataset.editId}"]`); if(wkBtn) wkBtn.click();
-    },0); });
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const sessInfo = weekSessionsById[btn.dataset.editId];
+      const idx = sessInfo ? weekOrder.findIndex(key => allWeeks[key].some(d=>d.iso===sessInfo.iso)) : -1;
+      if(idx !== -1) viewIndex = idx;
+      openTab('week'); renderWeek();
+      setTimeout(()=>{
+        const wkBtn = weekList.querySelector(`[data-edit-id="${btn.dataset.editId}"]`); if(wkBtn) wkBtn.click();
+      },0);
+    });
   });
   el.querySelectorAll('.sess[data-session-id]').forEach(node=>{
     node.addEventListener('click', (e)=>{ if(e.target.closest('[data-toggle-id],[data-edit-id],[data-del-id]')) return; openSessionDetail(node.dataset.sessionId); });
@@ -829,12 +898,21 @@ function renderToday(){
 const weekList = document.getElementById("weekList");
 
 function renderWeek(){
+  const wk = currentWeek();
   const rangeEl = document.getElementById('weekRangeLabel');
-  if(rangeEl && weekState.length){
+  const isThisWeek = wk.length && todayIso >= wk[0].iso && todayIso <= wk[wk.length-1].iso;
+  if(rangeEl && wk.length){
     const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
-    rangeEl.textContent = `${fmt(weekState[0].iso)} – ${fmt(weekState[weekState.length-1].iso)}`;
+    rangeEl.textContent = `${isThisWeek ? 'This Week · ' : ''}${fmt(wk[0].iso)} – ${fmt(wk[wk.length-1].iso)}`;
   }
-  weekList.innerHTML = weekState.map(day => `
+  const prevBtn = document.getElementById('weekPrevBtn');
+  const nextBtn = document.getElementById('weekNextBtn');
+  const todayBtn = document.getElementById('weekTodayBtn');
+  if(prevBtn) prevBtn.disabled = viewIndex <= 0;
+  if(nextBtn) nextBtn.disabled = viewIndex >= weekOrder.length - 1;
+  if(todayBtn) todayBtn.style.display = isThisWeek ? 'none' : 'inline-block';
+
+  weekList.innerHTML = wk.map(day => `
     <div class="day-row ${day.iso===todayIso ? 'today' : ''}">
       <div class="day-col"><div class="dow">${day.dow}</div><div class="dom display">${day.dom}</div></div>
       <div class="day-sessions" data-day-iso="${day.iso}">
@@ -888,13 +966,13 @@ function attachSessionInteractions(){
       container.classList.remove('drag-over');
       const id = e.dataTransfer.getData('text/plain');
       const targetIso = container.dataset.dayIso;
-      const fromDay = weekState.find(d => d.sessions.some(s=>s.id===id));
-      const toDay = weekState.find(d => d.iso === targetIso);
+      const fromDay = findDayContainingSession(id);
+      const toDay = currentWeek().find(d => d.iso === targetIso);
       if(!fromDay || !toDay || fromDay===toDay) return;
       const idx = fromDay.sessions.findIndex(s=>s.id===id);
       const [moved] = fromDay.sessions.splice(idx,1);
       toDay.sessions.push(moved);
-      await saveWeekState();
+      await saveAllWeeks();
       renderWeek(); renderToday();
     });
   });
@@ -910,11 +988,11 @@ function attachFormHandlers(){
       delBtn.addEventListener('click', async ()=>{
         if(!confirm('Remove this workout?')) return;
         const id = delBtn.dataset.formDelete;
-        const day = weekState.find(d => d.sessions.some(s=>s.id===id));
+        const day = findDayContainingSession(id);
         if(day) day.sessions = day.sessions.filter(s=>s.id!==id);
         delete doneMap[id];
         await saveDoneMap();
-        await saveWeekState();
+        await saveAllWeeks();
         renderWeek(); renderToday();
       });
     }
@@ -925,7 +1003,7 @@ function attachFormHandlers(){
       const dur = form.querySelector('.f-dur').value.trim() || '—';
       const desc = form.querySelector('.f-desc').value.trim();
       if(!name){ form.querySelector('.f-name').focus(); return; }
-      const day = weekState.find(d => d.iso === dayIso);
+      const day = currentWeek().find(d => d.iso === dayIso);
       if(editingId){
         const s = day.sessions.find(s=>s.id===editingId);
         s.name = name; s.dur = dur; s.desc = desc;
@@ -933,7 +1011,7 @@ function attachFormHandlers(){
         const id = 'sess-' + Date.now() + '-' + Math.floor(Math.random()*1000);
         day.sessions.push({id, name, dur, desc});
       }
-      await saveWeekState();
+      await saveAllWeeks();
       renderWeek(); renderToday();
     });
   });
@@ -957,16 +1035,21 @@ function openSessionDetail(id){
   if(s.locked){ actionsEl.innerHTML = ''; }
   else {
     actionsEl.innerHTML = `<button id="detailEdit">Edit</button><button class="danger" id="detailDelete">Remove</button>`;
-    document.getElementById('detailEdit').onclick = ()=>{ openTab('week'); setTimeout(()=>{
-      const btn = weekList.querySelector(`[data-edit-id="${id}"]`); if(btn) btn.click();
-    },0); };
+    document.getElementById('detailEdit').onclick = ()=>{
+      const idx = weekOrder.findIndex(key => allWeeks[key].some(d=>d.iso===s.iso));
+      if(idx !== -1) viewIndex = idx;
+      openTab('week'); renderWeek();
+      setTimeout(()=>{
+        const btn = weekList.querySelector(`[data-edit-id="${id}"]`); if(btn) btn.click();
+      },0);
+    };
     document.getElementById('detailDelete').onclick = async ()=>{
       if(!confirm('Remove this workout?')) return;
-      const day = weekState.find(d => d.sessions.some(x=>x.id===id));
+      const day = findDayContainingSession(id);
       if(day) day.sessions = day.sessions.filter(x=>x.id!==id);
       delete doneMap[id];
       await saveDoneMap();
-      await saveWeekState();
+      await saveAllWeeks();
       renderWeek(); renderToday();
       openTab('week');
     };
@@ -1071,15 +1154,41 @@ if('serviceWorker' in navigator){
 document.getElementById('suggestWeekBtn').addEventListener('click', async ()=>{
   const sugg = computeSuggestionLevel();
   const ok = confirm(
-    `${sugg.label}\n\n${sugg.reason}\n\nThis will replace next week's plan with a fresh draft based on this — you can still edit, add, remove, or drag anything afterward. Continue?`
+    `${sugg.label}\n\n${sugg.reason}\n\nThis adds a brand new week after your most recent one — nothing you already have gets touched, and you can navigate back to it anytime. Continue?`
   );
   if(!ok) return;
   const newWeek = buildSuggestedWeek(sugg);
-  // clear old done-toggles for the days being replaced so stale checkmarks don't carry over
-  weekState.forEach(day => day.sessions.forEach(s => delete doneMap[s.id]));
+  const key = newWeek[0].iso;
+  allWeeks[key] = newWeek;
+  weekOrder = Object.keys(allWeeks).sort();
+  viewIndex = weekOrder.indexOf(key);
+  await saveAllWeeks();
+  renderWeek();
+  renderToday();
+});
+
+document.getElementById('weekPrevBtn').addEventListener('click', ()=>{
+  if(viewIndex > 0){ viewIndex--; renderWeek(); }
+});
+document.getElementById('weekNextBtn').addEventListener('click', ()=>{
+  if(viewIndex < weekOrder.length - 1){ viewIndex++; renderWeek(); }
+});
+document.getElementById('weekTodayBtn').addEventListener('click', ()=>{
+  pickInitialView();
+  renderWeek();
+});
+document.getElementById('deleteWeekBtn').addEventListener('click', async ()=>{
+  if(weekOrder.length <= 1){ alert("This is your only saved week — can't delete it."); return; }
+  const key = weekOrder[viewIndex];
+  const wk = allWeeks[key];
+  const label = wk.length ? `${wk[0].date} – ${wk[wk.length-1].date}` : key;
+  if(!confirm(`Delete the whole week of ${label}? This can't be undone.`)) return;
+  wk.forEach(day => day.sessions.forEach(s => delete doneMap[s.id]));
   await saveDoneMap();
-  weekState = newWeek;
-  await saveWeekState();
+  delete allWeeks[key];
+  weekOrder = Object.keys(allWeeks).sort();
+  viewIndex = Math.min(viewIndex, weekOrder.length - 1);
+  await saveAllWeeks();
   renderWeek();
   renderToday();
 });
@@ -1087,7 +1196,7 @@ document.getElementById('suggestWeekBtn').addEventListener('click', async ()=>{
 (async function init(){
   await loadCachedIntervals();
   await loadDoneMap();
-  await loadWeekState();
+  await loadAllWeeks();
   rebuildIndexes();
   renderSideStat();
   renderToday();
