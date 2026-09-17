@@ -334,34 +334,9 @@
     </section>
 
     <section class="view" id="view-volume">
-      <div class="vol-bubbles">
-        <div class="card vol-bubble">
-          <div class="bubble-head"><div class="bubble-name">Weekly</div><div class="bubble-range">Trailing 7 days · Sep 1–7</div></div>
-          <div class="sport-grid">
-            <div class="sport-stat"><div class="k">Swim</div><div class="v">2,950 m</div><div class="dist">1.1 hrs</div></div>
-            <div class="sport-stat"><div class="k">Bike</div><div class="v">67.8 mi</div><div class="dist">4.4 hrs</div></div>
-            <div class="sport-stat"><div class="k">Run</div><div class="v">10.5 mi</div><div class="dist">1.7 hrs</div></div>
-          </div>
-        </div>
-        <div class="card vol-bubble">
-          <div class="bubble-head"><div class="bubble-name">Monthly</div><div class="bubble-range">September, to date</div></div>
-          <div class="sport-grid">
-            <div class="sport-stat"><div class="k">Swim</div><div class="v">2,950 m</div><div class="dist">1.1 hrs</div></div>
-            <div class="sport-stat"><div class="k">Bike</div><div class="v">67.8 mi</div><div class="dist">4.4 hrs</div></div>
-            <div class="sport-stat"><div class="k">Run</div><div class="v">10.5 mi</div><div class="dist">1.7 hrs</div></div>
-          </div>
-        </div>
-        <div class="card vol-bubble">
-          <div class="bubble-head"><div class="bubble-name">Yearly</div><div class="bubble-range">Since tracking began, Jun 27</div></div>
-          <div class="sport-grid">
-            <div class="sport-stat"><div class="k">Swim</div><div class="v">12,400 m</div><div class="dist">5.1 hrs</div></div>
-            <div class="sport-stat"><div class="k">Bike</div><div class="v">365.1 mi</div><div class="dist">23.0 hrs</div></div>
-            <div class="sport-stat"><div class="k">Run</div><div class="v">46.9 mi</div><div class="dist">7.6 hrs</div></div>
-          </div>
-        </div>
-      </div>
+      <div class="vol-bubbles" id="volumeBubbles"></div>
       <div class="note-box">
-        Broken out by sport from your intervals.icu activity history. Swim distance stays in meters (that's how swimmers actually think about it); bike and run are in miles. "Yearly" reads "since tracking began" rather than Jan 1, since that's as far back as the data goes. Ask me to refresh this any time you want current numbers.
+        Broken out by sport from your intervals.icu activity history — updates live every time you hit "⟲ Sync intervals.icu" in the sidebar. Swim distance stays in meters; bike and run are in miles. "Yearly" reads "since tracking began" rather than Jan 1, since that's as far back as the data goes.
       </div>
     </section>
 
@@ -519,6 +494,7 @@ let wellness = [
   {d:"2026-09-03",ctl:43.4,atl:60.6,tsb:-17.2},{d:"2026-09-04",ctl:43.9,atl:63.2,tsb:-19.3},
   {d:"2026-09-05",ctl:45.5,atl:69.8,tsb:-24.3},{d:"2026-09-06",ctl:44.9,atl:62.8,tsb:-17.9},
 ];
+let volumeStats = null; // filled in by syncFromIntervals() / loaded from cache
 let recentDone = [
   {d:"2026-09-07",sport:"Swim",detail:"Pool Swim",min:22.3,load:11,dist:1100},
   {d:"2026-09-06",sport:"Bike",detail:"Buffalo Grove Cycling",min:44,load:17,dist:16541.1},
@@ -608,7 +584,9 @@ function rebuildIndexes(){
 const PHASE1_TEMPLATE = [
   { dow:'Mon', sessions:[
     { name:'Run (Z2 easy, optional)', baseMin:25, hard:false, desc:'Skippable gap-filler. Do it when it feels right, not out of guilt.' },
-    { name:'Swim (technique)', baseMin:40, hard:false, desc:'CSS pace work. Drills: 6x25m fingertip drag. Main: 8x50m @ CSS pace w/ 20s rest.' }
+    { name:'Swim (tempo/CSS-pace)', baseMin:40, hard:true,
+      easyName:'Swim (technique, easy)', easyDesc:'Kept easy and technique-focused this week rather than tempo effort.',
+      desc:'Main set at or near CSS pace — e.g. 10x100m @ CSS w/ 15s rest, or 6x150m @ CSS w/ 20s rest. Moderate-hard effort, not a sprint — the point is sustained speed at threshold, not top-end speed.' }
   ]},
   { dow:'Tue', sessions:[
     { name:'Run (hard) — negative split tempo', baseMin:60, hard:true,
@@ -621,11 +599,11 @@ const PHASE1_TEMPLATE = [
       desc:'e.g. 4x8min at FTP with 3min easy recovery between, or steady 25-30min at threshold.' }
   ]},
   { dow:'Thu', sessions:[
-    { name:'Swim (technique, easy)', baseMin:45, hard:false, desc:'CSS pace work. Drills: 6x25m fingertip drag. Main: 8x50m @ CSS pace w/ 20s rest.' },
+    { name:'Swim (technique)', baseMin:45, hard:false, desc:'Drills-heavy, form-focused. 6x25m fingertip drag, catch-up drill, single-arm swim. Lower effort — the point is stroke mechanics, not fitness.' },
     { name:'Push (strength)', baseMin:null, hard:false, desc:'Weighted dips, close grip bench, lateral raise, cable pushdown.' }
   ]},
   { dow:'Fri', sessions:[
-    { name:'Swim (technique, evening)', baseMin:45, hard:false, desc:'CSS pace work plus stroke-count/cadence drills and kickboard.' },
+    { name:'Swim (endurance)', baseMin:55, hard:false, desc:'Longest, most continuous swim of the week. Mostly easy-moderate aerobic (Z2), minimal rest — building the ability to hold decent form when tired rather than raw speed.' },
     { name:'Run (Z2 easy)', baseMin:45, hard:false, desc:'Easy aerobic run, keep it conversational.' },
     { name:'Pull (strength)', baseMin:null, hard:false, desc:'Pulldowns, barbell rows, cable rows, curls.' }
   ]},
@@ -1112,29 +1090,91 @@ async function syncFromIntervals(){
       .sort((a,b)=> a.d.localeCompare(b.d));
     if(newWellness.length) wellness = newWellness.slice(-32);
 
-    const newDone = aJson
+    const allActivities = aJson
       .map(a => ({
         d: (a.start_date_local||'').slice(0,10),
-        sport: a.type || 'Other',
+        sport: normalizeSport(a.type),
         detail: a.name || a.type || '',
         min: a.moving_time ? +(a.moving_time/60).toFixed(1) : 0,
         load: a.icu_training_load != null ? Math.round(a.icu_training_load) : 0,
         dist: a.distance != null ? a.distance : null
       }))
       .sort((a,b)=> b.d.localeCompare(a.d));
-    if(newDone.length) recentDone = newDone.slice(0,10);
+    if(allActivities.length) recentDone = allActivities.slice(0,10);
 
-    await storeSet('intervals-cache', JSON.stringify({wellness, recentDone, syncedAt: new Date().toISOString()}));
+    volumeStats = computeVolumeStats(allActivities);
+
+    await storeSet('intervals-cache', JSON.stringify({wellness, recentDone, volumeStats, syncedAt: new Date().toISOString()}));
 
     renderSideStat();
     renderToday();
     renderChart();
     renderRecent();
+    renderVolume();
     if(statusEl) statusEl.textContent = 'Synced ' + new Date().toLocaleTimeString();
   }catch(e){
     if(statusEl) statusEl.textContent = 'Sync failed — check API deploy/env vars';
     console.warn('Sync failed', e);
   }
+}
+
+function normalizeSport(type){
+  if(!type) return 'Other';
+  const t = type.toLowerCase();
+  if(t.includes('ride') || t.includes('bike') || t.includes('cycl')) return 'Bike';
+  if(t.includes('run')) return 'Run';
+  if(t.includes('swim')) return 'Swim';
+  return 'Strength';
+}
+
+function computeVolumeStats(activities){
+  const now2 = new Date();
+  const weekAgoIso = isoLocal(new Date(now2.getTime() - 7*24*60*60*1000));
+  const monthStartIso = isoLocal(new Date(now2.getFullYear(), now2.getMonth(), 1));
+
+  function summarize(rows){
+    const out = {};
+    ['Swim','Bike','Run'].forEach(sport=>{
+      const matched = rows.filter(r => r.sport === sport);
+      const hrs = matched.reduce((sum,r)=> sum + (r.min||0), 0) / 60;
+      const meters = matched.reduce((sum,r)=> sum + (r.dist||0), 0);
+      out[sport] = { hrs, meters };
+    });
+    return out;
+  }
+
+  return {
+    weekly: summarize(activities.filter(a => a.d >= weekAgoIso)),
+    monthly: summarize(activities.filter(a => a.d >= monthStartIso)),
+    yearly: summarize(activities)
+  };
+}
+
+function renderVolume(){
+  const el = document.getElementById('volumeBubbles');
+  if(!el) return;
+  if(!volumeStats){
+    el.innerHTML = `<div class="card"><div class="empty-note">No synced data yet — hit "⟲ Sync intervals.icu" in the sidebar to populate this.</div></div>`;
+    return;
+  }
+  const monthName = new Date().toLocaleDateString('en-US', {month:'long'});
+  const bubbles = [
+    { key:'weekly', name:'Weekly', range:'Trailing 7 days' },
+    { key:'monthly', name:'Monthly', range:`${monthName}, to date` },
+    { key:'yearly', name:'Yearly', range:'Since tracking began' }
+  ];
+  el.innerHTML = bubbles.map(b => {
+    const stats = volumeStats[b.key];
+    const cells = ['Swim','Bike','Run'].map(sport => {
+      const s = stats[sport];
+      const distStr = sport === 'Swim' ? `${Math.round(s.meters).toLocaleString()} m` : `${(s.meters/1609.34).toFixed(1)} mi`;
+      return `<div class="sport-stat"><div class="k">${sport}</div><div class="v">${distStr}</div><div class="dist">${s.hrs.toFixed(1)} hrs</div></div>`;
+    }).join('');
+    return `<div class="card vol-bubble">
+      <div class="bubble-head"><div class="bubble-name">${b.name}</div><div class="bubble-range">${b.range}</div></div>
+      <div class="sport-grid">${cells}</div>
+    </div>`;
+  }).join('');
 }
 
 async function loadCachedIntervals(){
@@ -1144,6 +1184,7 @@ async function loadCachedIntervals(){
     const c = JSON.parse(raw);
     if(c.wellness && c.wellness.length) wellness = c.wellness;
     if(c.recentDone && c.recentDone.length) recentDone = c.recentDone;
+    if(c.volumeStats) volumeStats = c.volumeStats;
   }catch(e){}
 }
 
@@ -1203,6 +1244,7 @@ document.getElementById('deleteWeekBtn').addEventListener('click', async ()=>{
   renderWeek();
   renderChart();
   renderRecent();
+  renderVolume();
   syncFromIntervals(); // best-effort background refresh; silently no-ops until API/DB are configured
 })();
 </script>
