@@ -126,7 +126,7 @@
   .obs{font-size:14.5px; color:var(--paper-dim); line-height:1.6; margin-top:10px; border-left:2px solid var(--line-2); padding-left:14px;}
 
   /* Week */
-  .day-row{display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--line);}
+  .day-row{display:flex; gap:16px; padding:16px 0; border-bottom:1px solid var(--line); position:relative;}
   .day-row:last-child{border-bottom:none;}
   .day-col{width:58px; flex-shrink:0;}
   .day-col .dow{font-size:12px; color:var(--paper-dim);}
@@ -144,7 +144,12 @@
   .sess .name{font-weight:500; flex:1;}
   .sess.is-done .name{color:var(--paper-dim); text-decoration:line-through; text-decoration-color:var(--line-2);}
   .sess .dur{color:var(--paper-dim); font-size:13px; flex-shrink:0;}
-  .day-row.today{background:var(--coral-dim); margin:0 -16px; padding:16px; border-radius:10px;}
+  .day-row.today{background:var(--coral-dim); margin:0 -16px; padding:16px; border-radius:10px; border:1px solid rgba(193,101,46,0.4);}
+  .today-badge{
+    position:absolute; top:-9px; left:18px; z-index:2;
+    background:var(--coral); color:#fff; font-size:10.5px; font-weight:700;
+    letter-spacing:0.06em; padding:3px 9px; border-radius:100px;
+  }
 
   .icon-btn{
     background:none; border:none; color:var(--paper-faint); cursor:pointer;
@@ -585,8 +590,13 @@ const PHASE1_TEMPLATE = [
   { dow:'Mon', sessions:[
     { name:'Run (Z2 easy, optional)', baseMin:25, hard:false, desc:'Skippable gap-filler. Do it when it feels right, not out of guilt.' },
     { name:'Swim (tempo/CSS-pace)', baseMin:40, hard:true,
-      easyName:'Swim (technique, easy)', easyDesc:'Kept easy and technique-focused this week rather than tempo effort.',
-      desc:'Main set at or near CSS pace — e.g. 10x100m @ CSS w/ 15s rest, or 6x150m @ CSS w/ 20s rest. Moderate-hard effort, not a sprint — the point is sustained speed at threshold, not top-end speed.' }
+      easyName:'Swim (technique, easy)',
+      easyDesc:(min)=>`Kept easy and technique-focused this week rather than tempo effort. ~${min} min: warmup, drills, easy aerobic swimming — no CSS-pace work today.`,
+      desc:(min)=>{
+        const mainMin = Math.max(10, Math.round(min*0.6));
+        const reps = Math.max(4, Math.round(mainMin/2.5));
+        return `Warm up ~10 min easy, then main set at or near CSS pace (~1:14/50m) — about ${reps}x100m @ CSS w/ 15s rest (~${mainMin} min of quality swimming), cool down easy. Total ~${min} min. Moderate-hard effort, not a sprint — the point is sustained speed at threshold, not top-end speed.`;
+      } }
   ]},
   { dow:'Tue', sessions:[
     { name:'Run (hard) — negative split tempo', baseMin:60, hard:true,
@@ -599,11 +609,21 @@ const PHASE1_TEMPLATE = [
       desc:'e.g. 4x8min at FTP with 3min easy recovery between, or steady 25-30min at threshold.' }
   ]},
   { dow:'Thu', sessions:[
-    { name:'Swim (technique)', baseMin:45, hard:false, desc:'Drills-heavy, form-focused. 6x25m fingertip drag, catch-up drill, single-arm swim. Lower effort — the point is stroke mechanics, not fitness.' },
+    { name:'Swim (technique)', baseMin:45, hard:false,
+      desc:(min)=>{
+        const drillMin = Math.max(10, Math.round(min*0.4));
+        const mainMin = Math.max(8, min - drillMin - 8);
+        const reps = Math.max(6, Math.round(mainMin/1.5));
+        return `Warm up ~8 min easy, then ~${drillMin} min of technique work (fingertip drag, catch-up drill, single-arm swim), then ${reps}x50m easy-moderate focused purely on form, not speed. Total ~${min} min.`;
+      } },
     { name:'Push (strength)', baseMin:null, hard:false, desc:'Weighted dips, close grip bench, lateral raise, cable pushdown.' }
   ]},
   { dow:'Fri', sessions:[
-    { name:'Swim (endurance)', baseMin:55, hard:false, desc:'Longest, most continuous swim of the week. Mostly easy-moderate aerobic (Z2), minimal rest — building the ability to hold decent form when tired rather than raw speed.' },
+    { name:'Swim (endurance)', baseMin:55, hard:false,
+      desc:(min)=>{
+        const continuousMin = Math.max(15, min - 10);
+        return `Warm up ~6-8 min easy, then ${continuousMin} min continuous easy-moderate aerobic swimming (Z2), minimal rest — building the ability to hold decent form when tired rather than raw speed. Cool down easy. Total ~${min} min — this is the longest, most continuous swim of the week.`;
+      } },
     { name:'Run (Z2 easy)', baseMin:45, hard:false, desc:'Easy aerobic run, keep it conversational.' },
     { name:'Pull (strength)', baseMin:null, hard:false, desc:'Pulldowns, barbell rows, cable rows, curls.' }
   ]},
@@ -622,28 +642,48 @@ function computeSuggestionLevel(){
   const rampRate = latestW.ctl - weekAgo.ctl; // CTL change over ~7 days
   const tsb = latestW.tsb;
 
+  // Progressive overload: a standard 3-build / 1-cutback cycle, so volume
+  // actually climbs week over week instead of resetting to the same
+  // baseline every time. Counts how many weeks have been suggested so far
+  // (the original seed week doesn't count) to figure out cycle position.
+  const suggestedCount = Math.max(0, weekOrder.length - 1);
+  const cyclePos = suggestedCount % 4; // 0,1,2 = build weeks 1-3 ; 3 = scheduled cutback
+  const CYCLE_MULT = [1.00, 1.08, 1.17, 0.65];
+  const cycleLabel = cyclePos === 3 ? 'scheduled cutback' : `build week ${cyclePos+1} of 3`;
+
   if(tsb < -30){
     return { level:'cutback', multiplier:0.55, hardDays:0,
-      label:'Cutback week', reason:`Form is deeply negative (TSB ${tsb.toFixed(1)}) — carrying a lot of unrecovered fatigue. Cutting volume and dropping the hard sessions this week.` };
+      label:'Cutback week (forced)',
+      reason:`Form is deeply negative (TSB ${tsb.toFixed(1)}) — overriding the normal build cycle to cut volume and drop hard sessions this week, regardless of where you were in the progression.` };
   }
   if(tsb >= -30 && tsb < -15 && rampRate > 8){
     return { level:'hold', multiplier:1.0, hardDays:0,
-      label:'Hold, no new stress', reason:`Fitness has ramped fast (+${rampRate.toFixed(1)} CTL this week) and form is still negative (TSB ${tsb.toFixed(1)}). Holding volume flat and skipping new hard sessions.` };
+      label:'Hold, no new stress',
+      reason:`Fitness has ramped fast (+${rampRate.toFixed(1)} CTL this week) and form is still negative (TSB ${tsb.toFixed(1)}). Holding volume flat rather than progressing further, and skipping new hard sessions.` };
+  }
+  if(cyclePos === 3){
+    return { level:'cutback', multiplier:CYCLE_MULT[3], hardDays:0,
+      label:'Scheduled cutback week',
+      reason:`This is week 4 of the current build cycle — a planned lighter week so fitness actually absorbs the last 3 weeks of loading, regardless of form. TSB is ${tsb.toFixed(1)}.` };
   }
   if(tsb >= -30 && tsb < -15){
-    return { level:'maintain', multiplier:1.0, hardDays:2,
-      label:'Maintain', reason:`Form is negative but ramp rate looks normal (TSB ${tsb.toFixed(1)}, +${rampRate.toFixed(1)} CTL/wk) — proceeding as scheduled.` };
+    return { level:'maintain', multiplier:CYCLE_MULT[cyclePos], hardDays:2,
+      label:`Maintain — ${cycleLabel}`,
+      reason:`Form is negative but ramp rate looks normal (TSB ${tsb.toFixed(1)}, +${rampRate.toFixed(1)} CTL/wk). Proceeding with ${cycleLabel} of the progression.` };
   }
   if(tsb >= -15 && tsb < -5){
-    return { level:'build', multiplier:1.05, hardDays:2,
-      label:'Normal progression', reason:`Form is in a normal training range (TSB ${tsb.toFixed(1)}) — small volume increase okay.` };
+    return { level:'build', multiplier:CYCLE_MULT[cyclePos], hardDays:2,
+      label:`Normal progression — ${cycleLabel}`,
+      reason:`Form is in a normal training range (TSB ${tsb.toFixed(1)}) — proceeding with ${cycleLabel} of the progression.` };
   }
   if(tsb >= -5 && tsb <= 5){
-    return { level:'key', multiplier:1.05, hardDays:2,
-      label:'Good window for a key session', reason:`You're fairly fresh (TSB ${tsb.toFixed(1)}) — good week for the hard sessions to really count.` };
+    return { level:'key', multiplier:CYCLE_MULT[cyclePos], hardDays:2,
+      label:`Good window for a key session — ${cycleLabel}`,
+      reason:`You're fairly fresh (TSB ${tsb.toFixed(1)}) — good week for the hard sessions to really count. Proceeding with ${cycleLabel}.` };
   }
-  return { level:'push', multiplier:1.15, hardDays:2,
-    label:'Fresh — safe to push', reason:`Form is well positive and sustained (TSB ${tsb.toFixed(1)}) — safe to add some volume or intensity this week.` };
+  return { level:'push', multiplier:CYCLE_MULT[cyclePos] * 1.05, hardDays:2,
+    label:`Fresh — safe to push, ${cycleLabel}`,
+    reason:`Form is well positive and sustained (TSB ${tsb.toFixed(1)}) — safe to nudge volume a bit further than the standard progression this week.` };
 }
 
 function nextMondayAfter(lastIso){
@@ -665,7 +705,6 @@ function buildSuggestedWeek(sugg){
   const latestWeekArr = latestKey ? allWeeks[latestKey] : null;
   const lastIso = latestWeekArr && latestWeekArr.length ? latestWeekArr[latestWeekArr.length-1].iso : todayIso;
   const startDate = nextMondayAfter(lastIso);
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
   return PHASE1_TEMPLATE.map((template, i) => {
     const date = new Date(startDate);
@@ -677,8 +716,10 @@ function buildSuggestedWeek(sugg){
     const sessions = template.sessions.map((s, j) => {
       const useEasy = s.hard && sugg.hardDays === 0;
       const name = useEasy ? s.easyName : s.name;
-      const desc = useEasy ? s.easyDesc : s.desc;
-      const dur = scaleMin(s.baseMin, useEasy ? 1.0 : sugg.multiplier);
+      const descSrc = useEasy ? s.easyDesc : s.desc;
+      const rawMin = s.baseMin == null ? null : Math.max(10, Math.round((s.baseMin * (useEasy ? 1.0 : sugg.multiplier)) / 5) * 5);
+      const dur = rawMin == null ? '—' : rawMin + ' min';
+      const desc = typeof descSrc === 'function' ? descSrc(rawMin) : descSrc;
       return { id: `sug-${iso}-${j}`, name, dur, desc };
     });
 
@@ -892,6 +933,7 @@ function renderWeek(){
 
   weekList.innerHTML = wk.map(day => `
     <div class="day-row ${day.iso===todayIso ? 'today' : ''}">
+      ${day.iso===todayIso ? '<div class="today-badge">TODAY</div>' : ''}
       <div class="day-col"><div class="dow">${day.dow}</div><div class="dom display">${day.dom}</div></div>
       <div class="day-sessions" data-day-iso="${day.iso}">
         ${day.sessions.map(sessRowHtml).join("")}
