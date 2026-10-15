@@ -1701,5 +1701,34 @@ document.querySelector('.main-inner').insertAdjacentHTML('beforeend','<section c
 (async function(){await loadAll();renderZones();renderRecovery();window.renderToday();renderSideStat();syncExtras();})();
 })();
 </script>
+<script>
+(function(){
+const A=window.TRI.ATHLETE,mm=window.TRI.mmss;
+const BASE={css:148,ftp:201,run:495},MAY={css:130,ftp:230,run:475};
+const prog=(now,b,t)=>Math.round(Math.max(0,Math.min(1,(now-b)/(t-b)))*100);
+const bar=p=>`<div style="background:var(--surface-3);border-radius:100px;height:8px;width:120px;display:inline-block;vertical-align:middle"><div style="width:${p}%;height:8px;border-radius:100px;background:linear-gradient(90deg,var(--coral),var(--amber))"></div></div> <span style="margin-left:6px">${p}%</span>`;
+function renderGoals(){
+ const el=document.getElementById('view-progress');if(!el)return;
+ const old=document.getElementById('goalsCard');if(old)old.remove();
+ const rows=[
+  ['Swim CSS',mm(A.cssSec100)+'/100m','~2:10/100m',bar(prog(A.cssSec100,BASE.css,MAY.css)),'1:30/100m'],
+  ['Bike FTP',A.ftp+' W','~230 W',bar(prog(A.ftp,BASE.ftp,MAY.ftp)),'~305 W (to average 250 W)'],
+  ['Run threshold pace',mm(A.runThr)+'/mi','~7:55/mi',bar(prog(A.runThr,BASE.run,MAY.run)),'~7:15/mi (to hold 8:00 in the race)']
+ ].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('');
+ const odds=[['Under 5:20','3–5%'],['Under 5:30','10–15%'],['Under 5:45','40–45%'],['Under 6:00','75–80%'],['Under 6:15','~90%']]
+  .map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+ el.insertAdjacentHTML('afterbegin',`<div class="card" id="goalsCard"><h2 class="plain">Goals vs. where you are</h2>
+  <table class="ptable"><thead><tr><th>Metric</th><th>Now</th><th>Realistic by May</th><th>Progress to that</th><th>Your goal needs</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="obs">Progress is measured from your Oct 2026 baseline (CSS 2:28, FTP 201 W, threshold 8:15/mi) toward the realistic May number. Enter your retest results on the Zones tab and these bars move.</div>
+  <h2 class="plain" style="margin-top:26px">Finish-time odds</h2>
+  <table class="ptable" style="max-width:360px"><thead><tr><th>Finish</th><th>Rough odds</th></tr></thead><tbody>${odds}</tbody></table>
+  <div class="obs">These odds assume consistent, injury-free training for the full build. They're my judgment, not a calculation, and they should shift a lot after the retest.</div></div>`);
+}
+const el=document.getElementById('view-progress');
+new MutationObserver(()=>{if(!document.getElementById('goalsCard'))renderGoals();}).observe(el,{childList:true});
+document.querySelector('nav.sidenav button[data-tab="progress"]').addEventListener('click',renderGoals);
+renderGoals();
+})();
+</script>
 </body>
 </html>
