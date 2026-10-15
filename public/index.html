@@ -1334,7 +1334,7 @@ const PHASES=[
  {n:'Retest',s:RETEST_MON,blurb:'Short tests on fresh legs: CSS, FTP, LTHR. Reset zones after.'},
  {n:'Build',s:BUILD_START,blurb:'Race-pace run work, VO2 bike, brick + long run progression, maintenance-only strength.'}];
 const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
-const mmss=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}`;
+const mmss=s=>{s=Math.round(s);return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
 const wattsR=(lo,hi)=>`${Math.round(ATHLETE.ftp*lo)}–${Math.round(ATHLETE.ftp*hi)}W`;
 const hrR=(lo,hi)=>`${Math.round(ATHLETE.lthr*lo)}–${Math.round(ATHLETE.lthr*hi)}`;
 const weeksSince=(iso,d)=>Math.round((d-new Date(iso+'T12:00:00'))/(7*864e5));
@@ -1415,7 +1415,7 @@ window.computeSuggestionLevel=function(){
 const legacyBuild=window.buildSuggestedWeek;
 window.buildSuggestedWeek=function(sugg){
  const startDate=nextWeekStart(),startIso=isoLocal(startDate);let days;
- if(startIso>=BUILD_START)days=buildDays(buildIdx(startDate),sugg);
+ if(startIso>=BUILD_START)days=(window.triBuildDays||buildDays)(buildIdx(startDate),sugg);
  else if(startIso===RETEST_MON)days=retestDays();
  else return legacyBuild(sugg);
  return days.map((t,i)=>{const date=new Date(startDate);date.setDate(date.getDate()+i);const iso=isoLocal(date);
@@ -1468,7 +1468,7 @@ window.renderToday=function(){
  const empty=el.querySelector('.today-empty');
  if(empty)empty.textContent='Nothing is planned for today. Hit "Suggest next week" on the This Week tab.';
  const firstCard=el.querySelector('.card');
- if(firstCard)firstCard.insertAdjacentHTML('beforebegin',recoveryHtml());
+ if(firstCard)firstCard.insertAdjacentHTML('beforebegin',(window.triRecoveryCompact||recoveryHtml)());
  const b=el.querySelector('#ci-save');
  if(b)b.addEventListener('click',async()=>{
   const sleep=parseFloat(el.querySelector('#ci-sleep').value),sore=parseInt(el.querySelector('#ci-sore').value),energy=parseInt(el.querySelector('#ci-energy').value);
@@ -1492,11 +1492,213 @@ function renderProgress(){
  <div class="obs">Cutback rows (green) repeat the prior build week's targets at about 65% volume. Targets are linear ramps capped at race-relevant ceilings. If a week goes badly, repeat it instead of jumping ahead.</div></div>`;
 }
 
+window.TRI={ATHLETE,buildTargets,clamp,mmss};
 // ----- wire up: nav button, view container, initial render -----
 document.querySelector('nav.sidenav').insertAdjacentHTML('beforeend','<button data-tab="progress">Progression</button>');
 document.querySelector('nav.sidenav button[data-tab="progress"]').addEventListener('click',()=>openTab('progress'));
 document.querySelector('.main-inner').insertAdjacentHTML('beforeend','<section class="view" id="view-progress"></section>');
 (async function(){await loadCheckins();setPhaseTag();renderProgress();window.renderToday();})();
+})();
+</script>
+<script>
+(function(){
+const {ATHLETE,buildTargets,clamp,mmss}=window.TRI;
+const parseT=s=>{const m=/^(\d+):(\d{2})$/.exec(String(s).trim());return m?+m[1]*60+ +m[2]:NaN;};
+ATHLETE.runThr=495; // sec/mile (8:15)
+// ---------- specifics helpers ----------
+const rp=(a,b)=>`${mmss(ATHLETE.runThr*a)}–${mmss(ATHLETE.runThr*b)}/mi`;
+const hrR=(a,b)=>`${Math.round(ATHLETE.lthr*a)}–${Math.round(ATHLETE.lthr*b)} bpm`;
+const W=(a,b)=>`${Math.round(ATHLETE.ftp*a)}–${Math.round(ATHLETE.ftp*b)}W`;
+const pace100=add=>mmss(ATHLETE.cssSec100+add)+'/100m';
+const send=(d,add,rest)=>mmss(Math.ceil(((ATHLETE.cssSec100+add)*d/100+rest)/5)*5);
+const r50=x=>Math.round(x/50)*50;
+
+window.triBuildDays=function(idx,sugg){
+ const T=buildTargets(idx),f=sugg.level==='cutback'?sugg.multiplier:1,easy=sugg.hardDays===0;
+ const m=x=>Math.max(10,Math.round(x*f/5)*5)+' min', r=n=>Math.max(2,Math.round(n*f));
+ const mins=meters=>Math.max(20,Math.round(meters/100*2.7/5)*5)+' min';
+ const swimM=f<1?r50(T.swim*f):T.swim;
+ const easyPace=`${rp(1.25,1.35)}, HR ${hrR(.81,.89)}`, race=`${rp(1.09,1.13)}, HR ${hrR(.88,.93)}`;
+ // Mon easy run: rotates
+ const monRun=[`6x20s strides at ${rp(.93,.96)} after the run, walk back recovery`,`5x12s hill sprints (steep, ~6%) after the run, full walk-down recovery`,`last 5 min at steady effort (${rp(1.12,1.18)}) to finish`,`pure easy, no pickups. Keep it boring on purpose`][idx%4];
+ // Mon swim threshold: rotates through 5 formats
+ const thrV=[
+  ()=>{const n=r(8);return[n*100,`${n}x100m @ ${pace100(0)}, send-off ${send(100,0,15)} (~15s rest)`];},
+  ()=>{const n=r(4);return[n*200,`${n}x200m @ ${pace100(0)}, send-off ${send(200,0,20)} (~20s rest)`];},
+  ()=>{const n=r(3);return[n*300,`${n}x300m @ ${pace100(1)}, send-off ${send(300,1,30)} (~30s rest)`];},
+  ()=>f<1?[600,`100-200-200-100m @ ${pace100(0)}, 20s rest between`]:[900,`pyramid 100-200-300-200-100m @ ${pace100(0)}, 20s rest between`],
+  ()=>{const n=r(12);return[n*50,`${n}x50m FAST @ ${pace100(-3)}, send-off ${send(50,-3,10)} (~10s rest)`];}];
+ const [tm,td]=thrV[idx%5]();
+ const swimThr=easy?{name:'Swim (technique, easy)',dur:m(40),desc:`Easy week. Warm-up 200m easy, 6x50m drill/swim by 25 (catch-up, 6-3-6 breathing), then 8x100m relaxed @ ${pace100(12)} on ${send(100,12,15)}, 100m cooldown. No CSS-pace work.`}
+  :{name:`Swim (threshold, ${tm+700}m)`,dur:mins(tm+700),desc:`Warm-up 300m (100 free / 100 kick / 100 swim), then 4x50m catch-up drill/swim by 25 on 1:15. MAIN: ${td}. Cooldown 200m easy. Total about ${tm+700}m. Pace is your retest CSS (${mmss(ATHLETE.cssSec100)}/100m). If you can't hold it on the last rep, end the set there.`};
+ // Tue run: rotates through 4 race-pace formats
+ const tr=T.tr,tl=T.tl,L=T.p>=2?20:15;
+ const runV=[
+  ()=>[tr*(tl+3)-3,`${tr}x${tl} min @ race effort (${race}) w/ 3 min easy jog`],
+  ()=>[(tr+1)*11-2,`${tr+1}x1 mile @ ${rp(1.09,1.13)} w/ 90s easy jog (HR settles into ${hrR(.88,.93)} by rep 2)`],
+  ()=>[27,`12 min @ tempo (${rp(1.03,1.07)}, HR ${hrR(.90,.94)}), then straight into 15 min @ race effort (${race}) with no break`],
+  ()=>[2*L+5,`2x${L} min @ race effort (${race}) w/ 5 min easy jog`]];
+ const [rm,rd]=runV[idx%4]();
+ // Wed bike VO2: rotates through 3 formats
+ const n=T.vo2r;
+ const vo2=[`${n}x4 min @ ${W(1.06,1.15)} w/ 4 min easy spin`,`${n+1}x3 min @ ${W(1.12,1.20)} w/ 3 min easy spin`,`${n-1}x5 min @ ${W(1.06,1.12)} w/ 5 min easy spin`][idx%3];
+ // Thu swim technique: rotating drill sets
+ const D=[['catch-up','fingertip drag','single-arm (alternate sides)'],['6-3-6 bilateral breathing','fist drill','thumb-trail zipper'],['front sculling','single-arm with board','long-dog (extension)'],['breathe every 3/5/7 strokes','catch-up','fingertip drag']][idx%4];
+ const focus=['a high-elbow catch','hip rotation','bilateral breathing','long streamline off every wall'][idx%4];
+ const tn=r(6), techTot=900+tn*100;
+ // Fri swim: continuous, 3 formats
+ const fri=[`${swimM}m continuous @ ${pace100(10)} (CSS +8–12s), bilateral breathing every 3 strokes`,
+  `${swimM}m continuous, negative split: first half @ ${pace100(12)}, second half @ ${pace100(6)}`,
+  `${swimM}m continuous @ ${pace100(10)}, with a 100m surge @ ${pace100(2)} at each 500m mark`][idx%3];
+ // Sun long run: 3 formats
+ const run=T.run, lr=[`${run} min steady Z2 the whole way.`,`${run} min Z2, last 15 min at race effort (${race}).`,`${run} min Z2 except a 20 min block at race effort starting at minute ${Math.round(run*.4)}.`][T.p%3];
+ const bikeBlock=T.p>=2?` Mid-ride race-power blocks: 2x${T.p>=4?20:15} min @ ${W(.70,.78)} (about 70.3 race power), one starting near hour 1 and one near hour 2, easy Z2 between.`:'';
+ return[
+ {dow:'Mon',sessions:[
+  {name:'Run (Z2 easy)',dur:m(30),desc:`${m(30)} at ${easyPace}. Add: ${monRun}.`},swimThr]},
+ {dow:'Tue',sessions:[easy?{name:'Run (Z2 easy)',dur:m(45),desc:`Easy aerobic run at ${easyPace}. Kept easy this week instead of intervals.`}
+  :{name:'Run (hard) — race-pace intervals',dur:m(15+rm+10),desc:`Warm-up 15 min easy + 4x20s strides @ ${rp(.93,.96)}. MAIN: ${rd}. Cooldown 10 min easy. Race effort should feel controlled, like you could hold it for 13 miles; don't drift to threshold pace (${rp(.99,1.01)}).`}]},
+ {dow:'Wed',sessions:[
+  easy?{name:'Bike (Z2 easy)',dur:m(60),desc:`Easy spin @ ${W(.56,.70)}, high cadence (90+ rpm). Kept easy this week.`}
+   :{name:'Bike (VO2 intervals)',dur:m(70),desc:`Warm-up 15 min building from ${W(.50,.70)}, include 3x1 min @ ${W(.95,1.05)}. MAIN: ${vo2}. Cooldown 10 min easy. Go straight into the brick run.`},
+  {name:'Brick run (short)',dur:'10 min',desc:`Right off the bike, change shoes only. First 3 min quick short steps (170+ steps/min) @ ${rp(1.25,1.35)}, then settle @ ${rp(1.12,1.2)}. HR ${hrR(.81,.89)}.`},
+  {name:'Legs (maintenance)',dur:'—',desc:'Goblet squat 2x8, Romanian deadlift 2x8, walking lunge 2x8/leg, single-leg calf raise 2x12, plank 2x45s. Leave 3+ reps in reserve, rest 90s. Nothing here should make Thursday or Sunday worse.'}]},
+ {dow:'Thu',sessions:[
+  {name:`Swim (technique, ${techTot}m)`,dur:mins(techTot),desc:`Warm-up 200m easy. DRILLS: 4x50m ${D[0]} (25 drill/25 swim) on 1:20; 4x50m ${D[1]} on 1:20; 4x50m ${D[2]} on 1:20. MAIN: ${tn}x100m @ ${pace100(10)} on ${send(100,10,15)}, focus only on ${focus}. Cooldown 100m. Total about ${techTot}m.`},
+  {name:'Push (maintenance)',dur:'—',desc:'Dips 2x8 (bodyweight or light load), close-grip bench 2x10, lateral raise 2x12–15, cable pushdown 2x12–15. Rest 90s, stop 3 reps short of failure.'}]},
+ {dow:'Fri',sessions:[
+  {name:`Swim (endurance, ${swimM}m continuous)`,dur:mins(swimM+400),desc:`Warm-up 200m easy + 4x50m building speed. MAIN: ${fri}. Cooldown 100m. Total about ${swimM+400}m. Race swim is 1,900m: lift your head to sight for 3 strokes every 200m to practice.`},
+  {name:'Pull (maintenance)',dur:'—',desc:'Pulldowns 2x8, barbell row 2x8, cable row 2x10, rear delts 2x15, one curl variation 2x10. Rest 90s, 3 reps in reserve.'}]},
+ {dow:'Sat',sessions:[
+  {name:'Long bike',dur:m(T.bike),desc:`${m(T.bike)} mostly Z2 (${W(.56,.75)}, HR ${hrR(.81,.89)}), progressing toward 60–70 mi.${bikeBlock} Practice your race fueling plan (your 75–90g carb target) and drink to a schedule, not thirst.`},
+  {name:'Brick run (long)',dur:m(T.brick),desc:`${m(T.brick)} off the bike. First 5 min @ ${rp(1.25,1.35)} (legs will feel wooden), then settle @ ${rp(1.12,1.2)}, HR ${hrR(.81,.92)}. Progresses toward 30 min.`}]},
+ {dow:'Sun',sessions:[T.sunRun
+  ?{name:'Long run (Z2)',dur:m(T.run),desc:`${lr} Easy pace is ${rp(1.25,1.35)} (HR ${hrR(.81,.89)}). Take fuel every 30–40 min the way you plan to race. Walk 1 min if form breaks down.`}
+  :{name:'Rest',dur:'—',desc:'Full rest. Sleep, eat, and let Saturday settle in. Optional 10 min easy walk or mobility only.'}]}];
+};
+
+// ---------- storage: thresholds, check-ins, wellness extras ----------
+let checkins={},extras={};
+const jget=async(k,def)=>{const r=await storeGet(k);try{return r?JSON.parse(r):def;}catch(e){return def;}};
+async function loadAll(){
+ const a=await jget('athlete-v1',null);
+ if(a){['ftp','lthr','cssSec100','runThr'].forEach(k=>{if(a[k])ATHLETE[k]=a[k];});}
+ checkins=await jget('checkins-v1',{});extras=await jget('wellness-extras-v1',{});
+}
+
+// ---------- sleep / HRV / resting HR from intervals.icu ----------
+let syncNote='';
+async function syncExtras(){
+ try{
+  const res=await fetch('/api/intervals?type=wellness'); if(!res.ok){syncNote='Sync failed';return;}
+  const j=await res.json(); let found=0;
+  j.forEach(rec=>{const o={};
+   if(rec.sleepSecs>0)o.sleepH=+(rec.sleepSecs/3600).toFixed(1);
+   if(rec.sleepScore!=null)o.sleepScore=rec.sleepScore;
+   if(rec.hrv!=null)o.hrv=rec.hrv;
+   if(rec.restingHR!=null)o.rhr=rec.restingHR;
+   if(Object.keys(o).length){extras[rec.id]={...extras[rec.id],...o};found++;}});
+  syncNote=found?`Synced ${found} days of sleep/HRV/resting HR from intervals.icu`:'intervals.icu returned no sleep, HRV or resting HR fields. Check that your watch syncs sleep to intervals.icu and that /api/intervals passes the wellness fields through.';
+  await storeSet('wellness-extras-v1',JSON.stringify(extras));
+ }catch(e){syncNote='Sync failed';}
+ renderRecovery(); window.renderToday();
+}
+const origSync=window.syncFromIntervals;
+window.syncFromIntervals=async function(){await origSync();await syncExtras();};
+
+// ---------- readiness ----------
+function baseline(key){const ks=Object.keys(extras).filter(k=>k<todayIso&&extras[k][key]!=null).sort().slice(-14);
+ return ks.length<5?null:ks.reduce((s,k)=>s+extras[k][key],0)/ks.length;}
+function readiness(){
+ const l=getLatest(),c=checkins[todayIso]||{},x=extras[todayIso]||{};let pts=0;const why=[],used=['training load'];
+ if(l.tsb<-25){pts+=2;why.push(`form is deep (TSB ${l.tsb.toFixed(0)})`);}else if(l.tsb<-15){pts+=1;why.push(`form is negative (TSB ${l.tsb.toFixed(0)})`);}
+ const sleep=x.sleepH??c.sleep; if(sleep!=null){used.push(x.sleepH!=null?'synced sleep':'logged sleep');
+  if(sleep<6){pts+=2;why.push(`${sleep}h sleep`);}else if(sleep<7){pts+=1;why.push(`${sleep}h sleep`);}}
+ const rb=baseline('rhr'); if(x.rhr!=null&&rb){used.push('resting HR');if(x.rhr-rb>=5){pts+=1;why.push(`resting HR ${x.rhr} (avg ${Math.round(rb)})`);}}
+ const hb=baseline('hrv'); if(x.hrv!=null&&hb){used.push('HRV');if(x.hrv<hb*.75){pts+=2;why.push(`HRV ${x.hrv} well below your ${Math.round(hb)} average`);}else if(x.hrv<hb*.85){pts+=1;why.push(`HRV ${x.hrv} below your ${Math.round(hb)} average`);}}
+ if(c.sore!=null){used.push('soreness');if(c.sore>=4){pts+=2;why.push('high soreness');}else if(c.sore===3){pts+=1;why.push('moderate soreness');}}
+ if(c.energy!=null){used.push('energy');if(c.energy<=2){pts+=2;why.push('low energy');}}
+ const day=daysByIsoAll[todayIso]||{sessions:[]};
+ const hard=day.sessions.some(s=>/hard|vo2|interval|threshold|test|long/i.test(s.name));
+ const lvl=pts>=4?'r':pts>=2?'y':'g';
+ const msg={g:hard?"Green. Execute today's key session as written.":"Green. You're absorbing the load.",
+  y:hard?'Yellow. Start the key session and judge the first 15 min. If HR runs high for the effort or legs are flat, cut volume by a third and keep it easy.':'Yellow. Keep everything easy today and protect sleep.',
+  r:hard?"Red. Swap today's hard session for Z2 or rest. One missed key session costs far less than a forced week off.":'Red. Rest or easy movement only.'}[lvl];
+ return{lvl,msg,why,used,x,c};
+}
+const statusHtml=(r)=>`<div class="ready"><div class="ready-dot ${r.lvl}"></div><div><div class="ready-msg">${r.msg}</div>
+ <div class="ready-why">${r.why.length?'Flags: '+r.why.join(', '):'No flags.'} <span style="color:var(--paper-faint)">Based on: ${r.used.join(', ')}.</span></div></div></div>`;
+window.triRecoveryCompact=function(){
+ return`<div class="card" id="recoveryCard" style="cursor:pointer" onclick="openTab('recovery')"><h2>Recovery</h2>${statusHtml(readiness())}
+ <div class="ready-why" style="margin-top:10px">Open the Recovery tab to log soreness/energy or see sleep and HRV trends.</div></div>`;
+};
+
+// ---------- Recovery tab ----------
+function renderRecovery(){
+ const el=document.getElementById('view-recovery');if(!el)return;
+ const r=readiness(),c=r.c,x=r.x;
+ const dates=[...new Set([...Object.keys(extras),...Object.keys(checkins)])].sort().reverse().slice(0,14);
+ const rows=dates.map(d=>{const e=extras[d]||{},k=checkins[d]||{};
+  return`<tr><td>${d.slice(5)}</td><td>${e.sleepH??k.sleep??'—'}</td><td>${e.sleepScore??'—'}</td><td>${e.hrv??'—'}</td><td>${e.rhr??'—'}</td><td>${k.sore??'—'}</td><td>${k.energy??'—'}</td></tr>`;}).join('');
+ const sleepField=x.sleepH!=null?`<div><label>Sleep last night</label><div style="padding:9px 0;font-size:15px">${x.sleepH} h <span style="color:var(--paper-faint);font-size:12px">synced</span></div></div>`
+  :`<div><label>Sleep last night (h), no synced data</label><input type="number" step="0.25" min="0" max="14" id="ci-sleep" value="${c.sleep??''}"></div>`;
+ el.innerHTML=`<div class="card"><h2>Readiness today</h2>${statusHtml(r)}</div>
+ <div class="card"><h2 class="plain">Daily check-in</h2>
+  <div class="checkin">${sleepField}
+   <div><label>Soreness (1 fresh – 5 wrecked)</label><input type="number" min="1" max="5" id="ci-sore" value="${c.sore??''}"></div>
+   <div><label>Energy (1 flat – 5 great)</label><input type="number" min="1" max="5" id="ci-energy" value="${c.energy??''}"></div>
+   <button id="ci-save">Log</button></div>
+  <div class="obs">${syncNote||'Sleep, HRV and resting HR come from intervals.icu when you hit Sync. Soreness and energy are the only things you type.'}</div></div>
+ <div class="card"><h2 class="plain">Last 14 days</h2>
+  <table class="ptable"><thead><tr><th>Date</th><th>Sleep (h)</th><th>Sleep score</th><th>HRV</th><th>Rest HR</th><th>Sore</th><th>Energy</th></tr></thead>
+  <tbody>${rows||'<tr><td colspan="7">No data yet. Hit Sync intervals.icu.</td></tr>'}</tbody></table></div>`;
+ const b=el.querySelector('#ci-save');
+ b.addEventListener('click',async()=>{
+  const sl=el.querySelector('#ci-sleep'),sore=parseInt(el.querySelector('#ci-sore').value),energy=parseInt(el.querySelector('#ci-energy').value);
+  if(isNaN(sore)||isNaN(energy))return;
+  const o={sore,energy}; if(sl&&!isNaN(parseFloat(sl.value)))o.sleep=parseFloat(sl.value);
+  checkins[todayIso]={...checkins[todayIso],...o};
+  await storeSet('checkins-v1',JSON.stringify(checkins));
+  renderRecovery();window.renderToday();});
+}
+
+// ---------- Zones tab: editable thresholds, tables recompute ----------
+function renderZones(){
+ const el=document.getElementById('view-zones'),A=ATHLETE,L=A.lthr,F=A.ftp,q=Math.round;
+ const hrz=[['#6FA8DC','Z1 — Recovery','<81%',`<${q(.81*L)}`],['var(--sage)','Z2 — Aerobic','81–89%',`${q(.81*L)}–${q(.89*L)}`],['var(--amber)','Z3 — Tempo','90–94%',`${q(.9*L)}–${q(.94*L)}`],['var(--coral)','Z4 — Threshold','95–99%',`${q(.95*L)}–${q(.99*L)}`],['#B23A3A','Z5 — VO2max / Anaerobic','100%+',`${q(L)}+`]];
+ const pz=[['#6FA8DC','Z1 — Active Recovery','<55%',`<${q(.55*F)}`],['var(--sage)','Z2 — Endurance','56–75%',`${q(.56*F)}–${q(.75*F)}`],['var(--amber)','Z3 — Tempo','76–90%',`${q(.76*F)}–${q(.9*F)}`],['var(--coral)','Z4 — Threshold','91–105%',`${q(.91*F)}–${q(1.05*F)}`],['#B23A3A','Z5 — VO2max','106–120%',`${q(1.06*F)}–${q(1.2*F)}`],['#7B3FA0','Z6 — Anaerobic Capacity','121–150%',`${q(1.21*F)}–${q(1.5*F)}`],['#4B2E5A','Z7 — Neuromuscular','>150%',`${q(1.5*F)}+`]];
+ const tbl=(h,rows)=>`<table class="ztable"><thead><tr><th>Zone</th><th>${h[0]}</th><th>${h[1]}</th></tr></thead><tbody>${rows.map(z=>`<tr><td class="zname"><span class="zbar" style="background:${z[0]}"></span>${z[1]}</td><td>${z[2]}</td><td class="zrange">${z[3]}</td></tr>`).join('')}</tbody></table>`;
+ el.innerHTML=`<div class="card"><h2 class="plain">Thresholds</h2>
+  <div class="zone-grid">
+   <div class="zone-card"><div class="icon-label">Swim</div><div class="big">${mmss(A.cssSec100)}<span style="font-size:14px;color:var(--paper-dim);">/100m</span></div><div class="small">Critical swim speed (CSS)</div></div>
+   <div class="zone-card"><div class="icon-label">Bike</div><div class="big">${F}W</div><div class="small">FTP</div></div>
+   <div class="zone-card"><div class="icon-label">Run</div><div class="big">${L}<span style="font-size:14px;color:var(--paper-dim);"> bpm</span></div><div class="small">LTHR · ${mmss(A.runThr)}/mi threshold pace</div></div></div>
+  <h2 style="margin-top:24px">Update after retest</h2>
+  <div class="checkin" style="grid-template-columns:repeat(4,1fr) auto">
+   <div><label>CSS (mm:ss /100m)</label><input id="z-css" value="${mmss(A.cssSec100)}"></div>
+   <div><label>FTP (W)</label><input id="z-ftp" type="number" value="${F}"></div>
+   <div><label>Run LTHR (bpm)</label><input id="z-lthr" type="number" value="${L}"></div>
+   <div><label>Run threshold pace (mm:ss /mi)</label><input id="z-run" value="${mmss(A.runThr)}"></div>
+   <button id="z-save">Save</button></div>
+  <div class="obs" id="z-msg">Saving updates every zone below and all weeks you generate from now on. Weeks already generated keep their old numbers; regenerate or edit them.</div></div>
+ <div class="card"><h2 class="plain">Heart rate zones — run (LTHR ${L} bpm)</h2>${tbl(['% LTHR','BPM'],hrz)}</div>
+ <div class="card"><h2 class="plain">Power zones — bike (Coggan, FTP ${F}W)</h2>${tbl(['% FTP','Watts'],pz)}
+  <div class="obs">Zone edges can differ by 1 bpm or watt from intervals.icu's own rounding. Your Jul 17 20-min TT put bike threshold HR near 168 bpm, with quad fatigue as the limiter, so treat power as the more reliable number on the Kickr.</div></div>
+ <div class="card"><h2 class="plain">Gear</h2><div class="obs" style="margin-top:0;">Garmin Forerunner 255 · Wahoo Kickr Core · SAVA A7L PRO (Shimano 105, 12-speed) · Garmin Edge 820</div></div>`;
+ el.querySelector('#z-save').addEventListener('click',async()=>{
+  const css=parseT(el.querySelector('#z-css').value),run=parseT(el.querySelector('#z-run').value),ftp=parseInt(el.querySelector('#z-ftp').value),lthr=parseInt(el.querySelector('#z-lthr').value);
+  const msg=el.querySelector('#z-msg');
+  if(!(css>=60&&css<=300)||!(run>=240&&run<=720)||!(ftp>=80&&ftp<=500)||!(lthr>=120&&lthr<=210)){msg.textContent='Check the values: times as mm:ss, FTP 80–500, LTHR 120–210.';return;}
+  Object.assign(ATHLETE,{cssSec100:css,runThr:run,ftp,lthr});
+  await storeSet('athlete-v1',JSON.stringify({cssSec100:css,runThr:run,ftp,lthr}));
+  renderZones();document.getElementById('z-msg').textContent='Saved. Zones updated.';});
+}
+
+// ---------- wire up ----------
+document.querySelector('nav.sidenav').insertBefore(Object.assign(document.createElement('button'),{textContent:'Recovery'}),document.querySelector('nav.sidenav button[data-tab="zones"]'));
+const rb=document.querySelector('nav.sidenav button:not([data-tab])');rb.dataset.tab='recovery';rb.addEventListener('click',()=>openTab('recovery'));
+document.querySelector('.main-inner').insertAdjacentHTML('beforeend','<section class="view" id="view-recovery"></section>');
+(async function(){await loadAll();renderZones();renderRecovery();window.renderToday();renderSideStat();syncExtras();})();
 })();
 </script>
 </body>
