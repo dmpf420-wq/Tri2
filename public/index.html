@@ -29,6 +29,213 @@
     --radius: 12px;
   }
   *{box-sizing:border-box;}
+  <!-- ===== TRI LOG BUILD-PHASE UPGRADE: paste this whole block right before </body> ===== -->
+<style>
+.brand h1{background:linear-gradient(90deg,var(--paper),var(--amber) 140%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.card{position:relative;overflow:hidden;transition:border-color .2s ease;}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--coral),var(--amber),var(--teal));opacity:.55;}
+.card:hover{border-color:var(--line-2);}
+.today-hero-name{background:linear-gradient(90deg,var(--paper) 45%,var(--coral));-webkit-background-clip:text;background-clip:text;color:transparent;}
+.stat{border:1px solid var(--line);}
+.sdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--paper-faint);}
+.sdot.swim{background:var(--teal);}.sdot.bike{background:var(--amber);}.sdot.run{background:var(--coral);}.sdot.str{background:#9B7BD4;}.sdot.rest{background:var(--sage);}
+.sess{border-left:2px solid transparent;}.sess:hover{border-left-color:var(--line-2);}
+.ready{display:flex;gap:16px;align-items:flex-start;}
+.ready-dot{width:16px;height:16px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+.ready-dot.g{background:var(--sage);box-shadow:0 0 14px rgba(95,174,110,.6);}
+.ready-dot.y{background:var(--amber);box-shadow:0 0 14px rgba(242,193,78,.6);}
+.ready-dot.r{background:#D94F4F;box-shadow:0 0 14px rgba(217,79,79,.6);}
+.ready-msg{font-size:15.5px;line-height:1.55;}
+.ready-why{font-size:13px;color:var(--paper-dim);margin-top:4px;}
+.checkin{display:grid;grid-template-columns:repeat(3,1fr) auto;gap:12px;align-items:end;margin-top:18px;}
+.checkin label{font-size:12px;color:var(--paper-dim);display:block;margin-bottom:6px;}
+.checkin input{width:100%;background:var(--surface-3);border:1px solid var(--line-2);color:var(--paper);border-radius:8px;padding:9px 10px;font-family:'Inter',sans-serif;}
+.checkin button{background:var(--coral);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:600;cursor:pointer;}
+.tl{display:flex;gap:6px;margin-bottom:6px;}
+.tl div{flex:1;padding:14px;border-radius:10px;background:var(--surface-3);border:1px solid var(--line);font-size:13px;color:var(--paper-dim);}
+.tl div b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:22px;color:var(--paper);font-weight:600;}
+.tl .on{border-color:var(--coral);background:var(--coral-dim);}
+.tl .past{opacity:.5;}
+.ptable{width:100%;border-collapse:collapse;font-size:13.5px;}
+.ptable th{text-align:left;color:var(--paper-faint);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;padding:8px;border-bottom:1px solid var(--line-2);}
+.ptable td{padding:9px 8px;border-bottom:1px solid var(--line);color:var(--paper-dim);}
+.ptable tr.cut td{color:var(--sage);}
+.ptable td:first-child{color:var(--paper);font-weight:600;}
+@media(max-width:600px){.checkin{grid-template-columns:1fr 1fr;}.tl{flex-direction:column;}}
+</style>
+<script>
+(function(){
+// ===== CONFIG: update ATHLETE after the retest =====
+const ATHLETE={ftp:201,lthr:177,cssSec100:148}; // CSS 2:28/100m = 148s
+const RETEST_MON='2026-10-19', BUILD_START='2026-10-26';
+const PHASES=[
+ {n:'Base',s:'2026-07-01',blurb:'Aerobic volume, technique, general strength. (Oct 12–18 is the pre-retest taper.)'},
+ {n:'Retest',s:RETEST_MON,blurb:'Short tests on fresh legs: CSS, FTP, LTHR. Reset zones after.'},
+ {n:'Build',s:BUILD_START,blurb:'Race-pace run work, VO2 bike, brick + long run progression, maintenance-only strength.'}];
+const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+const mmss=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}`;
+const wattsR=(lo,hi)=>`${Math.round(ATHLETE.ftp*lo)}–${Math.round(ATHLETE.ftp*hi)}W`;
+const hrR=(lo,hi)=>`${Math.round(ATHLETE.lthr*lo)}–${Math.round(ATHLETE.lthr*hi)}`;
+const weeksSince=(iso,d)=>Math.round((d-new Date(iso+'T12:00:00'))/(7*864e5));
+const buildIdx=d=>Math.max(0,weeksSince(BUILD_START,d));
+function currentPhase(){let p=PHASES[0];PHASES.forEach(x=>{if(todayIso>=x.s)p=x;});return p;}
+function setPhaseTag(){const p=currentPhase(),el=document.querySelector('.phase-tag');if(el)el.innerHTML=`Phase — ${p.n}<div class="bubble">${p.blurb}</div>`;}
+function nextWeekStart(){const k=weekOrder[weekOrder.length-1],arr=k?allWeeks[k]:null;return nextMondayAfter(arr&&arr.length?arr[arr.length-1].iso:todayIso);}
+
+// All build targets in one place; generator and Progression tab share it.
+// 3 build + 1 cutback. Cutback weeks repeat the previous build week's targets, then volume is scaled down.
+function buildTargets(idx){
+ const cut=idx%4===3,p=idx-Math.floor(idx/4)-(cut?1:0);
+ return{cut,p,run:clamp(60+5*p,60,100),bike:clamp(150+10*p,150,240),brick:clamp(20+2*p,20,30),
+  swim:Math.round(clamp(1500+100*p,1500,1900)/50)*50,vo2r:clamp(5+Math.floor(p/3),5,7),
+  tr:clamp(3+Math.floor(p/2),3,5),tl:p>=4?10:8,sunRun:idx%2===0};
+}
+function buildDays(idx,sugg){
+ const T=buildTargets(idx),f=sugg.level==='cutback'?sugg.multiplier:1,easy=sugg.hardDays===0;
+ const m=x=>Math.max(10,Math.round(x*f/5)*5)+' min';
+ const swimM=f<1?Math.round(T.swim*f/50)*50:T.swim, swimMin=Math.round((10+swimM*2.8/100)/5)*5;
+ const css=mmss(ATHLETE.cssSec100),c50=mmss(ATHLETE.cssSec100/2);
+ return[
+ {dow:'Mon',sessions:[
+  {name:'Run (Z2 easy)',dur:m(30),desc:`Easy and conversational, HR ${hrR(.81,.89)}.`},
+  easy?{name:'Swim (technique, easy)',dur:m(40),desc:'Kept easy this week: drills and relaxed aerobic swimming, no CSS-pace work.'}
+   :{name:'Swim (threshold)',dur:m(45),desc:`Use your RETEST CSS (${css}/100m, ${c50}/50m). 300m warmup + drills, then ${Math.max(6,Math.round(8*f))}x100m @ CSS w/ 15s rest, easy cooldown.`}]},
+ {dow:'Tue',sessions:[easy?{name:'Run (Z2 easy)',dur:m(45),desc:'Easy aerobic run, kept easy this week instead of intervals.'}
+  :{name:'Run (hard) — race-pace intervals',dur:m(15+T.tr*(T.tl+3)+10),desc:`15 min warmup + 4x20s strides. Main: ${T.tr}x${T.tl} min at goal 70.3 effort (HR ~${hrR(.88,.93)}, controlled, not threshold) w/ 3 min easy jog. 10 min cooldown. Aim for a rhythm you could hold for 13 miles.`}]},
+ {dow:'Wed',sessions:[
+  easy?{name:'Bike (Z2 easy)',dur:m(60),desc:'Easy Z2 spin, kept easy this week.'}
+   :{name:'Bike (VO2 intervals)',dur:m(70),desc:`15 min warmup, ${T.vo2r}x4 min @ ${wattsR(1.06,1.20)} w/ 4 min easy spin, 10 min cooldown. Straight into the brick.`},
+  {name:'Brick run (short)',dur:'10 min',desc:`Right off the bike, HR ${hrR(.81,.89)}. Quick short steps for 2 min, then settle.`},
+  {name:'Legs (maintenance)',dur:'—',desc:'Lighter, maintenance only: 2–3 sets per lift, 3+ reps in reserve. No soreness carried into Thursday.'}]},
+ {dow:'Thu',sessions:[
+  {name:'Swim (technique)',dur:m(45),desc:'Drills (fingertip drag, catch-up, single-arm, 6-3-6 bilateral breathing), then 50s easy focused on form only.'},
+  {name:'Push (maintenance)',dur:'—',desc:'Lighter: dips 2x8, close grip bench 2x10, lateral raise 2x12–15, pushdown 2x12–15. Stop well short of failure.'}]},
+ {dow:'Fri',sessions:[
+  {name:`Swim (endurance, ${swimM}m continuous)`,dur:m(swimMin),desc:`200m warmup, then ${swimM}m continuous at steady aerobic effort (~CSS +8–12s/100m), holding form when tired. Race distance is 1,900m; you build to it week by week.`},
+  {name:'Pull (maintenance)',dur:'—',desc:'Lighter: pulldowns 2x8, barbell row 2x8, cable row 2x10, rear delts 2x15, one curl variation 2x10.'}]},
+ {dow:'Sat',sessions:[
+  {name:'Long bike',dur:m(T.bike),desc:`Mostly Z2 (HR ${hrR(.81,.89)}), progressing toward 60–70 mi. Practice race fueling: 75–90g carbs.`},
+  {name:'Brick run (long)',dur:m(T.brick),desc:`Off the bike at easy-to-steady effort (HR ${hrR(.81,.92)}). Progresses toward 30 min.`}]},
+ {dow:'Sun',sessions:[T.sunRun
+  ?{name:'Long run (Z2)',dur:m(T.run),desc:`Dedicated long run, HR ${hrR(.81,.89)}. Run volume progresses on its own: ${T.run} min base target this week. Walk breaks are fine if form fades.`}
+  :{name:'Rest',dur:'—',desc:'Full rest day. This is where the Sat long bike + brick gets absorbed.'}]}];
+}
+// Placeholder retest protocol. EDIT to match your coach.
+function retestDays(){return[
+ {dow:'Mon',sessions:[{name:'Run (Z2 easy)',dur:'30 min',desc:'Short and easy. Stay fresh.'},{name:'Swim (technique, easy)',dur:'30 min',desc:'Relaxed drills, no hard efforts.'}]},
+ {dow:'Tue',sessions:[{name:'Swim — CSS test (400m + 200m TT)',dur:'45 min',desc:'400m warmup. 400m all-out TT, 5 min rest, 200m all-out TT. New CSS pace/100m = (t400 − t200) / 2 in seconds. Put it in ATHLETE.cssSec100.'}]},
+ {dow:'Wed',sessions:[{name:'Bike — FTP test',dur:'60 min',desc:'Use the SAME protocol as your baseline test so numbers are comparable. Put the result in ATHLETE.ftp.'}]},
+ {dow:'Thu',sessions:[{name:'Easy spin (or rest)',dur:'30 min',desc:'Z1 only. Legs fresh for tomorrow.'}]},
+ {dow:'Fri',sessions:[{name:'Run — threshold test (30-min TT)',dur:'50 min',desc:'15 min warmup, 30 min steady all-out. LTHR = avg HR of the last 20 min; threshold pace = avg pace. Put it in ATHLETE.lthr.'}]},
+ {dow:'Sat',sessions:[{name:'Easy spin (or rest)',dur:'30 min',desc:'Optional, Z1.'}]},
+ {dow:'Sun',sessions:[{name:'Rest',dur:'—',desc:'Rest. Build phase starts tomorrow.'}]}];}
+
+// ----- override: suggestion level (same logic as before + retest + calendar-based cycle position) -----
+window.computeSuggestionLevel=function(){
+ const w=wellness,latestW=w[w.length-1],weekAgo=w.length>7?w[w.length-8]:w[0];
+ const rampRate=latestW.ctl-weekAgo.ctl,tsb=latestW.tsb;
+ const nws=nextWeekStart(),nwsIso=isoLocal(nws);
+ if(nwsIso===RETEST_MON)return{level:'retest',multiplier:1,hardDays:2,label:'Retest week',reason:`Short test efforts on fresh legs (TSB ${tsb.toFixed(1)}). Protocol is a placeholder; edit it to match your coach.`};
+ const suggestedCount=nwsIso>=BUILD_START?buildIdx(nws):Math.max(0,weekOrder.length-1);
+ const cyclePos=suggestedCount%4,CYCLE_MULT=[1.00,1.08,1.17,0.65];
+ const cycleLabel=cyclePos===3?'scheduled cutback':`build week ${cyclePos+1} of 3`;
+ if(tsb<-30)return{level:'cutback',multiplier:0.55,hardDays:0,label:'Cutback week (forced)',reason:`Form is deeply negative (TSB ${tsb.toFixed(1)}). Cutting volume and dropping hard sessions regardless of cycle position.`};
+ if(tsb>=-30&&tsb<-15&&rampRate>8)return{level:'hold',multiplier:1.0,hardDays:0,label:'Hold, no new stress',reason:`Fitness ramped fast (+${rampRate.toFixed(1)} CTL) and form is still negative (TSB ${tsb.toFixed(1)}). Holding volume flat, no new hard sessions.`};
+ if(cyclePos===3)return{level:'cutback',multiplier:CYCLE_MULT[3],hardDays:0,label:'Scheduled cutback week',reason:`Week 4 of the build cycle: a planned lighter week so the last 3 weeks of loading get absorbed. TSB is ${tsb.toFixed(1)}.`};
+ if(tsb>=-30&&tsb<-15)return{level:'maintain',multiplier:CYCLE_MULT[cyclePos],hardDays:2,label:`Maintain — ${cycleLabel}`,reason:`Form is negative but ramp rate is normal (TSB ${tsb.toFixed(1)}, +${rampRate.toFixed(1)} CTL/wk). Proceeding with ${cycleLabel}.`};
+ if(tsb>=-15&&tsb<-5)return{level:'build',multiplier:CYCLE_MULT[cyclePos],hardDays:2,label:`Normal progression — ${cycleLabel}`,reason:`Form is in a normal training range (TSB ${tsb.toFixed(1)}). Proceeding with ${cycleLabel}.`};
+ if(tsb>=-5&&tsb<=5)return{level:'key',multiplier:CYCLE_MULT[cyclePos],hardDays:2,label:`Good window for key sessions — ${cycleLabel}`,reason:`You're fairly fresh (TSB ${tsb.toFixed(1)}). Hard sessions should really count. Proceeding with ${cycleLabel}.`};
+ return{level:'push',multiplier:CYCLE_MULT[cyclePos]*1.05,hardDays:2,label:`Fresh — safe to push, ${cycleLabel}`,reason:`Form is well positive (TSB ${tsb.toFixed(1)}). Safe to nudge volume a bit past the standard progression.`};
+};
+
+// ----- override: week generator (falls back to the old Base generator before the retest) -----
+const legacyBuild=window.buildSuggestedWeek;
+window.buildSuggestedWeek=function(sugg){
+ const startDate=nextWeekStart(),startIso=isoLocal(startDate);let days;
+ if(startIso>=BUILD_START)days=buildDays(buildIdx(startDate),sugg);
+ else if(startIso===RETEST_MON)days=retestDays();
+ else return legacyBuild(sugg);
+ return days.map((t,i)=>{const date=new Date(startDate);date.setDate(date.getDate()+i);const iso=isoLocal(date);
+  return{dow:t.dow,dom:String(date.getDate()),iso,date:`${t.dow}, ${date.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`,
+   sessions:t.sessions.map((s,j)=>({id:`sug-${iso}-${j}`,...s}))};});
+};
+
+// ----- sport dots on session rows -----
+function sportOf(n){n=n.toLowerCase();if(/rest/.test(n))return'rest';if(/swim/.test(n))return'swim';if(/bike|spin|ride/.test(n))return'bike';if(/run/.test(n))return'run';return'str';}
+window.sessRowHtml=function(s){return`
+ <div class="sess ${isDone(s.id)&&!s.locked?'is-done':''}" data-session-id="${s.id}" draggable="${s.locked?'false':'true'}">
+  ${toggleHtml(s.id,s.locked)}<i class="sdot ${sportOf(s.name)}"></i>
+  <span class="name">${s.name}</span><span class="dur">${s.dur}</span>
+  <div class="bubble">${!s.locked?`<button class="bubble-edit" data-edit-id="${s.id}">Edit</button>`:''}<span class="b-dur">${s.dur}</span>${s.desc}</div>
+ </div>`;};
+
+// ----- recovery -----
+let checkins={};
+async function loadCheckins(){const r=await storeGet('checkins-v1');try{checkins=r?JSON.parse(r):{};}catch(e){checkins={};}}
+function readiness(){
+ const l=getLatest(),c=checkins[todayIso];let pts=0;const why=[];
+ if(l.tsb<-25){pts+=2;why.push(`form is deep (TSB ${l.tsb.toFixed(0)})`);}else if(l.tsb<-15){pts+=1;why.push(`form is negative (TSB ${l.tsb.toFixed(0)})`);}
+ if(c){
+  if(c.sleep<6){pts+=2;why.push(`${c.sleep}h sleep`);}else if(c.sleep<7){pts+=1;why.push(`${c.sleep}h sleep`);}
+  if(c.sore>=4){pts+=2;why.push('high soreness');}else if(c.sore===3){pts+=1;why.push('moderate soreness');}
+  if(c.energy<=2){pts+=2;why.push('low energy');}}
+ const day=daysByIsoAll[todayIso]||{sessions:[]};
+ const hard=day.sessions.some(s=>/hard|vo2|interval|threshold|test|long/i.test(s.name));
+ const lvl=pts>=4?'r':pts>=2?'y':'g';
+ const msg={g:hard?"Green. Execute today's key session as written.":"Green. You're absorbing the load.",
+  y:hard?'Yellow. Start the key session and judge the first 15 min. If HR runs high for the effort or legs are flat, cut volume by a third and keep it easy.':'Yellow. Keep everything easy today and protect sleep.',
+  r:hard?"Red. Swap today's hard session for Z2 or rest. One missed key session costs far less than a forced week off.":'Red. Rest or easy movement only.'}[lvl];
+ return{lvl,msg,why,c};
+}
+function recoveryHtml(){
+ const r=readiness(),c=r.c||{};
+ return`<div class="card" id="recoveryCard"><h2>Recovery</h2>
+  <div class="ready"><div class="ready-dot ${r.lvl}"></div><div><div class="ready-msg">${r.msg}</div>
+  <div class="ready-why">${r.why.length?'Flags: '+r.why.join(', '):(r.c?'No flags.':'Based on training load only. Log a check-in to sharpen it.')}</div></div></div>
+  <div class="checkin">
+   <div><label>Sleep last night (h)</label><input type="number" step="0.25" min="0" max="14" id="ci-sleep" value="${c.sleep??''}"></div>
+   <div><label>Soreness (1 fresh – 5 wrecked)</label><input type="number" min="1" max="5" id="ci-sore" value="${c.sore??''}"></div>
+   <div><label>Energy (1 flat – 5 great)</label><input type="number" min="1" max="5" id="ci-energy" value="${c.energy??''}"></div>
+   <button id="ci-save">Log</button></div></div>`;
+}
+const origToday=window.renderToday;
+window.renderToday=function(){
+ origToday();
+ const el=document.getElementById('view-today');
+ const empty=el.querySelector('.today-empty');
+ if(empty)empty.textContent='Nothing is planned for today. Hit "Suggest next week" on the This Week tab.';
+ const firstCard=el.querySelector('.card');
+ if(firstCard)firstCard.insertAdjacentHTML('beforebegin',recoveryHtml());
+ const b=el.querySelector('#ci-save');
+ if(b)b.addEventListener('click',async()=>{
+  const sleep=parseFloat(el.querySelector('#ci-sleep').value),sore=parseInt(el.querySelector('#ci-sore').value),energy=parseInt(el.querySelector('#ci-energy').value);
+  if([sleep,sore,energy].some(isNaN))return;
+  checkins[todayIso]={sleep,sore,energy};
+  await storeSet('checkins-v1',JSON.stringify(checkins));
+  window.renderToday();});
+};
+
+// ----- progression tab -----
+function renderProgress(){
+ const el=document.getElementById('view-progress');if(!el)return;
+ const cur=currentPhase();
+ const tl=PHASES.map(p=>`<div class="${p.n===cur.n?'on':(todayIso>p.s?'past':'')}"><b>${p.n}</b>${p.s.slice(5)} →<br>${p.blurb}</div>`).join('');
+ const bs=new Date(BUILD_START+'T12:00:00');let rows='';
+ for(let i=0;i<12;i++){const d=new Date(bs);d.setDate(d.getDate()+i*7);const T=buildTargets(i);
+  rows+=`<tr class="${T.cut?'cut':''}"><td>${i+1}</td><td>${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</td><td>${T.cut?'Cutback':'Build'}</td><td>${T.run} min</td><td>${T.bike} min</td><td>${T.brick} min</td><td>${T.swim} m</td><td>${T.vo2r}x4</td><td>${T.tr}x${T.tl}</td><td>${T.sunRun?'Long run':'Rest'}</td></tr>`;}
+ el.innerHTML=`<div class="card"><h2 class="plain">Phases</h2><div class="tl">${tl}</div></div>
+ <div class="card"><h2 class="plain">Build progression: first 12 weeks</h2>
+ <table class="ptable"><thead><tr><th>Wk</th><th>Starts</th><th>Type</th><th>Long run</th><th>Long bike</th><th>Brick</th><th>Fri swim</th><th>VO2</th><th>Tue</th><th>Sun</th></tr></thead><tbody>${rows}</tbody></table>
+ <div class="obs">Cutback rows (green) repeat the prior build week's targets at about 65% volume. Targets are linear ramps capped at race-relevant ceilings. If a week goes badly, repeat it instead of jumping ahead.</div></div>`;
+}
+
+// ----- wire up: nav button, view container, initial render -----
+document.querySelector('nav.sidenav').insertAdjacentHTML('beforeend','<button data-tab="progress">Progression</button>');
+document.querySelector('nav.sidenav button[data-tab="progress"]').addEventListener('click',()=>openTab('progress'));
+document.querySelector('.main-inner').insertAdjacentHTML('beforeend','<section class="view" id="view-progress"></section>');
+(async function(){await loadCheckins();setPhaseTag();renderProgress();window.renderToday();})();
+})();
+</script>
   html,body{margin:0;padding:0;}
   body{
     background:
